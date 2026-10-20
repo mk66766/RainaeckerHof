@@ -155,6 +155,10 @@ nav{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:
 nav button{flex:1;background:none;color:var(--muted);border-radius:10px;padding:8px 2px;font-size:14px;display:flex;flex-direction:column;align-items:center;gap:2px}
 nav button{position:relative}
 nav button svg{width:24px;height:24px}
+:root[data-proj="goats"]{--yolk:#7DB548;--yolk-ink:#132300}
+.projects button.on{background:var(--yolk);color:var(--yolk-ink)}
+.logo{width:34px;height:34px;border-radius:9px;flex:none}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
 .hi{margin-right:7px}
 .eier{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
 .ei{width:17px;height:22px;fill:none;stroke:var(--muted);stroke-width:.8}
@@ -418,9 +422,10 @@ async function loadLoginList(){
   try{ const {data, error} = await sb.rpc('login_families'); if(!error && Array.isArray(data) && data.length) loginList = data.map(x => ({name:x.name, email:x.email})); }catch(e){}
 }
 function showLogin(){
+  delete document.documentElement.dataset.proj;
   document.getElementById('nav').style.display = 'none';
   document.getElementById('app').innerHTML = `
-    <div class="top"><h1>Unser Rainäcker Hof</h1></div>
+    <div class="top"><div class="brand"><img class="logo" src="/favicon.svg" alt=""><h1>Unser Rainäcker Hof</h1></div></div>
     <div class="card">
       <h2>Wer bist du?</h2>
       <div class="seg" style="flex-wrap:wrap">${loginChoices().map(f =>
@@ -467,6 +472,7 @@ const TABS = {
 let tab = 'eier';
 function render(){
   if(!S.p) return;
+  document.documentElement.dataset.proj = P().kind;
   const tabs = TABS[P().kind];
   if(!tabs.some(t=>t[0]===tab)) tab = tabs[0][0];
   const nav = document.getElementById('nav'); nav.style.display = 'flex';
@@ -474,9 +480,9 @@ function render(){
     `<button onclick="tab='${k}';render();window.scrollTo(0,0)" ${tab===k?'aria-current="page"':''}>${ic[i]}<span>${l}</span>${k==='eier' && openOrders().length ? `<span class="nbadge" aria-label="${openOrders().length} offene Bestellungen">${openOrders().length}</span>` : ''}${k==='kasse' && kasseTodo() ? `<span class="nbadge" aria-label="${kasseTodo()} offene Zahlungen für dich">${kasseTodo()}</span>` : ''}</button>`).join('');
   const views = {eier:vEier, dienst:vDienst, kasse:vKasse, hof:vHof, tiere:vTiere, gesund:vGesund};
   document.getElementById('app').innerHTML = `
-    <div class="top"><h1>Unser Rainäcker Hof</h1>
+    <div class="top"><div class="brand"><img class="logo" src="/favicon.svg" alt=""><h1>Unser Rainäcker Hof</h1></div>
       <div class="me">${esc(fam(S.me).name)}</div></div>
-    ${S.projects.length>1 ? `<div class="projects" role="tablist">${S.projects.map(p=>`<button role="tab" class="${p.id===S.cur?'on':''}" aria-selected="${p.id===S.cur}" onclick="setProject('${p.id}')">${esc(p.name)}</button>`).join('')}</div>` : ''}` + views[tab]();
+    ${S.projects.length>1 ? `<div class="projects" role="tablist">${S.projects.map(p=>`<button role="tab" class="${p.id===S.cur?'on':''}" aria-selected="${p.id===S.cur}" onclick="setProject('${p.id}')"><span aria-hidden="true">${p.kind === 'goats' ? '🐐' : '🐔'}</span> ${esc(p.name)}</button>`).join('')}</div>` : ''}` + views[tab]();
   const ws = document.getElementById('weekscroll'); if(ws) ws.scrollLeft = ws.scrollWidth;   // Wochenbalken: laufende Woche rechts im Blick
   weekDutyPopup();
 }
