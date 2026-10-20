@@ -1365,7 +1365,7 @@ function payLine(t){
   const conf = t.confirmedBy ? (famByUid(t.confirmedBy) || {}).name : '';
   if(!t.state) return `<div class="paychip"><span class="pc warn">Zahlung nicht erfasst</span><button class="alt small" onclick="sheetPayCapture('${t.id}')">Erfassen</button></div>`;
   if(t.state === 'bar_offen') return `<div class="paychip"><span class="pc ${od ? 'bad' : 'warn'}">Bargeld offen bei ${esc(who)}${seit}</span><button class="alt small" onclick="payDeposit('${t.id}')">Eingezahlt</button></div>`;
-  if(t.state === 'pruefen') return `<div class="paychip"><span class="pc ${od ? 'bad' : 'info'}">Eingang prüfen${seit}</span><button class="alt small" onclick="sheetPayConfirm('${t.id}')">Eingang bestätigt</button></div>`;
+  if(t.state === 'pruefen') return `<div class="paychip"><span class="pc ${od ? 'bad' : 'info'}">Eingang prüfen${seit}</span>${S.admin ? `<button class="alt small" onclick="sheetPayConfirm('${t.id}')">Eingang bestätigt</button>` : '<span class="muted" style="font-size:14px">prüft der Admin</span>'}</div>`;
   return `<div class="paychip"><span class="pc good">✓ bestätigt${conf ? ' von ' + esc(conf) : ''}${t.confirmedAt ? ', ' + fmtDay(new Date(t.confirmedAt)) : ''}</span></div>`;
 }
 function txRow(t){
@@ -1376,10 +1376,10 @@ function txRow(t){
 }
 
 /* Karte „Offene Zahlungen“ */
-// Was in der Kasse auf mich wartet: eigenes Bargeld einzahlen und Eingänge prüfen
+// Was in der Kasse auf mich wartet: eigenes Bargeld einzahlen, beim Admin auch Eingänge prüfen
 function kasseTodo(){
   const tr = P().tx.filter(tracked);
-  return tr.filter(t => t.state === 'bar_offen' && t.seller === S.me).length + tr.filter(t => t.state === 'pruefen').length;
+  return tr.filter(t => t.state === 'bar_offen' && t.seller === S.me).length + (S.admin ? tr.filter(t => t.state === 'pruefen').length : 0);
 }
 function openPayCard(){
   const tr = P().tx.filter(tracked);
@@ -1391,7 +1391,7 @@ function openPayCard(){
   const late = open.some(overdue), pendOld = Math.max(0, ...pend.map(ageOf));
   const lines = [
     ...Object.entries(cash).map(([n, v]) => `<div${n === me ? ' style="font-weight:600"' : ''}>Bargeld bei ${esc(n)}${n === me ? ' (du)' : ''}: ${eur(v)} noch einzuzahlen${oldest[n] >= OVERDUE.bar_offen ? ` <span class="neg">(seit ${oldest[n]} Tagen)</span>` : ''}</div>`),
-    pend.length ? `<div>${pend.length === 1 ? '1 PayPal-Eingang' : pend.length + ' PayPal-Eingänge'} (${eur(sum(pend, payTotal))}) noch zu prüfen${pendOld >= OVERDUE.pruefen ? ` <span class="neg">(älteste seit ${pendOld} Tagen)</span>` : ''}</div>` : '',
+    pend.length ? `<div>${pend.length === 1 ? '1 PayPal-Eingang' : pend.length + ' PayPal-Eingänge'} (${eur(sum(pend, payTotal))}) ${S.admin ? 'noch zu prüfen' : 'prüft noch der Admin'}${pendOld >= OVERDUE.pruefen ? ` <span class="neg">(älteste seit ${pendOld} Tagen)</span>` : ''}</div>` : '',
     legacy.length ? `<div>${legacy.length} Buchung${legacy.length === 1 ? '' : 'en'} ohne Zahlungsstand</div>` : ''
   ].join('');
   return `
@@ -1411,6 +1411,7 @@ async function payDeposit(id){
 }
 /* Eingang auf dem PayPal-Konto bestätigen; Mehrbetrag = Trinkgeld */
 function sheetPayConfirm(id){
+  if(!S.admin) return;                                  // nur der Admin hat Zugriff auf das PayPal-Konto
   const t = P().tx.find(x => x.id === id); if(!t) return;
   openSheet('Eingang bestätigen', `<p class="muted" style="margin:0">Schau im PayPal-Konto nach: Ist die Zahlung dort angekommen?</p>
     <p style="margin:12px 0 0"><strong>${esc(t.desc)}</strong><br><span class="muted">${txMeta(t)} · erwartet ${eur(payTotal(t))}</span></p>
@@ -1418,6 +1419,7 @@ function sheetPayConfirm(id){
     <p class="muted" style="margin:8px 0 0">Mehr als erwartet? Der Rest wird als Trinkgeld gebucht. Weniger: Die Zahlung bleibt offen.</p>` + actions2(`doPayConfirm('${id}')`, 'Eingang bestätigen'));
 }
 async function doPayConfirm(id){
+  if(!S.admin) return;
   const t = P().tx.find(x => x.id === id); if(!t) return;
   const tot = Math.round(payTotal(t) * 100) / 100, got = Math.round(num(val('pc')) * 100) / 100;
   if(got < tot - 0.004){
@@ -1437,10 +1439,11 @@ function sheetPayCapture(id){
   openSheet('Zahlungsstand erfassen', `<p class="muted" style="margin:0">Zu „${esc(t.desc)}“ (${eur(t.amt)}) wurde noch nicht festgehalten, wie bezahlt wurde. Wie ist der Stand?</p>
     <button class="alt" style="width:100%;margin-top:12px" onclick="doPayCapture('${id}','bar_offen')">Bargeld, noch nicht eingezahlt</button>
     <button class="alt" style="width:100%;margin-top:8px" onclick="doPayCapture('${id}','pruefen')">Auf dem PayPal-Konto, Eingang noch prüfen</button>
-    <button class="yolk" style="width:100%;margin-top:8px" onclick="doPayCapture('${id}','bestaetigt')">Alles in Ordnung, schon geprüft</button>
+    ${S.admin ? `<button class="yolk" style="width:100%;margin-top:8px" onclick="doPayCapture('${id}','bestaetigt')">Alles in Ordnung, schon geprüft</button>` : ''}
     <button class="alt" style="width:100%;margin-top:8px" onclick="closeSheet()">Abbrechen</button>`);
 }
 function doPayCapture(id, state){
+  if(state === 'bestaetigt' && !S.admin) return;
   const t = P().tx.find(x => x.id === id); if(!t) return;
   const f = t.seller ? S.fams.find(x => x.id === t.seller) : famByUid(t.by);
   const upd = {pay_method: state === 'bar_offen' ? 'bar' : 'paypal', pay_state: state, seller_id: f ? f.id : null};
@@ -1697,7 +1700,7 @@ function showPay(){
     <p style="text-align:center;margin:8px 0 0"><strong>${pay.amount>0 ? eur(pay.amount) : 'Betrag frei wählbar'}</strong><br><span class="muted">paypal.me/${esc(pay.name)}</span></p>
     ${pay.booked && !nbPays ? `<button class="yolk" style="width:100%;margin-top:12px" onclick="payOpen()">PayPal öffnen</button>
       <p class="muted" style="margin:6px 0 0;font-size:14px">Bargeld bekommen? Mit „PayPal öffnen“ zahlst du es in die Gemeinschaftskasse ein. Soll der Nachbar selbst per PayPal zahlen, schick ihm die Nachricht oder zeig den QR-Code.</p>` : ''}
-    ${nbPays ? `<p class="muted" style="margin:10px 0 0;font-size:14px">Der Nachbar zahlt selbst per PayPal: Schick ihm die Nachricht oder zeig den QR-Code. Den Eingang bestätigt ihr später in der Kasse.</p>` : ''}
+    ${nbPays ? `<p class="muted" style="margin:10px 0 0;font-size:14px">Der Nachbar zahlt selbst per PayPal: Schick ihm die Nachricht oder zeig den QR-Code. Den Eingang bestätigt der Admin später in der Kasse.</p>` : ''}
     ${payExtras()}
     <label>Nachricht an den Nachbarn (du kannst sie ändern)</label>
     <textarea id="ppm" rows="8">${esc(payMessage(pay))}</textarea>
@@ -2063,7 +2066,7 @@ function manualCard(){
     <li><b>Aktualisieren:</b> Zieh die Seite ganz oben nach unten und lass los. Alle Familien sehen dieselben Daten, was jemand einträgt, siehst du nach dem Aktualisieren.</li>
     <li><b>Aufs Handy legen:</b> Wähle im Browser-Menü „Zum Startbildschirm hinzufügen“, dann startet die App wie jede andere.</li>
     <li><b>Unten</b> wechselst du zwischen den Bereichen. Alles, was du tippst, wird sofort für alle gespeichert.</li>
-    <li>Eine <b>rote Zahl</b> am Reiter zeigt, dass etwas auf dich wartet: ${hens?'bei Eier offene Bestellungen von Nachbarn, ':''}bei Kasse dein Bargeld zum Einzahlen und Eingänge, die jemand prüfen muss.</li>
+    <li>Eine <b>rote Zahl</b> am Reiter zeigt, dass etwas auf dich wartet: ${hens?'bei Eier offene Bestellungen von Nachbarn, ':''}bei Kasse dein Bargeld zum Einzahlen (beim Admin auch Eingänge, die er prüfen muss).</li>
     <li>Hat deine Familie Dienst, steht oben <b>Du hast diese Woche Dienst</b>. Beim ersten Öffnen der Woche kommt dazu einmal ein kurzer Hinweis.</li>
     <li>Bei Anzahlen kannst du mit <b>−</b> und <b>+</b> tippen statt die Zahl einzugeben. Kurze Erklärungen klappst du mit <b>ⓘ</b> auf.</li></ul>`);
   const fehler = manDet('fehler', 'Fehler korrigieren und Protokoll', `<ul>
@@ -2116,7 +2119,7 @@ function manualCard(){
       manDet('zahlkontrolle', 'Zahlungen kontrollieren, Trinkgeld und Kassenabgleich', `<ul>
         <li>Jeder Verkauf und jede Zusatz-Eier-Buchung zeigt in der <b>Kasse</b>, welche Familie verkauft bzw. genommen hat, und den Zahlungsstand darunter.</li>
         <li><b>Bargeld offen</b>: Die verkaufende Familie hat das Bargeld und zahlt es per PayPal in die Gemeinschaftskasse ein. Danach tippt sie auf <b>Eingezahlt</b>.</li>
-        <li><b>Eingang prüfen:</b> Der Betrag soll auf dem PayPal-Konto sein (vom Nachbarn bezahlt oder von der Familie eingezahlt). Wer ins Konto schaut, tippt auf <b>Eingang bestätigt</b> und trägt ein, was angekommen ist. <b>Mehr</b> als erwartet wird als Trinkgeld gebucht, <b>weniger</b> lässt die Zahlung offen.</li>
+        <li><b>Eingang prüfen:</b> Der Betrag soll auf dem PayPal-Konto sein (vom Nachbarn bezahlt oder von der Familie eingezahlt). Nur der <b>Admin</b> hat Zugriff auf das PayPal-Konto: Er schaut nach, tippt auf <b>Eingang bestätigt</b> und trägt ein, was angekommen ist. Bei den Familien steht so lange „prüft der Admin“. <b>Mehr</b> als erwartet wird als Trinkgeld gebucht, <b>weniger</b> lässt die Zahlung offen.</li>
         <li>Den <b>PayPal-Link</b> der Gemeinschaftskasse siehst du in der <b>Kasse</b> mit dem Knopf <b>PayPal-Link anzeigen</b> (der Admin auch im Tab <b>Hof</b> unter „Einstellungen“). Dort kannst du ihn kopieren, den QR-Code zeigen oder ihn per WhatsApp schicken.</li>
         <li>Die Karte <b>Offene Zahlungen</b> in der Kasse zeigt, wer noch Bargeld einzuzahlen hat und welche Eingänge zu prüfen sind. Ältere Buchungen ohne Zahlungsstand lassen sich mit <b>Erfassen</b> nachtragen.</li>
         <li>Trinkgeld bar: Beim Verkauf bei <b>Erhalten</b> den echten Betrag eintragen, die Differenz wird als eigene Trinkgeld-Buchung in die Gemeinschaftskasse gebucht. Trinkgeld per PayPal: Im Bezahlfenster mit dem Knopf „Auf … aufrunden“ einen höheren Betrag verlangen.</li>

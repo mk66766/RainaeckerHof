@@ -39,11 +39,12 @@ eq(buildReminders(base({ tx: [cash(7), cash(5, { id: "tx5" })] }), tue)[0].text.
 eq(buildReminders(base({ tx: [cash(7), kid("t7", 1)] }), tue)[0].text.includes("5,00 €"), true, "Trinkgeld wird zum Bargeld gezählt (5,00 €)");
 eq(buildReminders(base({ tx: [cash(7), cash(10, { id: "tz", seller_id: "B" })] }), tue).map((i) => i.userId).sort(), ["uA", "uB"], "jede Familie bekommt nur ihr eigenes Bargeld genannt");
 
-// --- PayPal-Eingang prüfen: ab 3 Tagen, an alle Familien des Projekts
+// --- PayPal-Eingang prüfen: ab 3 Tagen, nur an den Admin (nur er hat Zugriff auf das PayPal-Konto)
 const chk = (age: number, id = "p" + age) => ({ id, project_id: "h", date: minus("2026-10-20", age), amount: 4, pay_state: "pruefen", seller_id: "B", parent_id: null });
 eq(buildReminders(base({ tx: [chk(2)] }), tue).length, 0, "Eingang seit 2 Tagen: noch nichts");
 it = buildReminders(base({ tx: [chk(3)] }), tue);
-eq(it.map((i) => i.userId).sort(), ["uA", "uB", "uC"], "Eingang seit 3 Tagen: alle drei Hühner-Familien");
+eq(it.map((i) => i.userId).sort(), ["uC"], "Eingang seit 3 Tagen: nur der Admin, nicht die Familien");
+eq(buildReminders(base({ tx: [chk(3)], families: [{ id: "A", name: "Bader", user_id: "uA" }, { id: "B", name: "Hatesaul", user_id: "uB" }, { id: "C", name: "Kaufmann", user_id: "uC" }] }), tue).length, 0, "kein Admin im Projekt: keine Prüf-Erinnerung");
 eq(it[0].text, "1 PayPal-Eingang (4,00 €) ist noch nicht bestätigt (Hühner).", "Text Einzahl");
 eq(buildReminders(base({ tx: [chk(4)] }), tue).length, 0, "Tag 4: Pause");
 eq(buildReminders(base({ tx: [chk(6), chk(3, "pq")] }), tue)[0].text, "2 PayPal-Eingänge (8,00 €) sind noch nicht bestätigt (Hühner).", "Text Mehrzahl mit Summe");

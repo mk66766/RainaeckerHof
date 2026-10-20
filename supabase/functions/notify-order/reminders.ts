@@ -21,7 +21,6 @@ const label = (p: Project) => (p.kind === "goats" ? "Ziegen" : "Hühner");
 export function buildReminders(d: Data, now: Now): Item[] {
   const items: Item[] = [];
   const uidOf = (famId: string | null) => d.families.find((f) => f.id === famId)?.user_id || null;
-  const membersOf = (pid: string) => d.members.filter((m) => m.project_id === pid).map((m) => uidOf(m.family_id)).filter(Boolean) as string[];
   const total = (t: Data["tx"][number]) => Number(t.amount) + d.tx.filter((x) => x.parent_id === t.id).reduce((s, x) => s + Number(x.amount), 0);
   const adminsOf = (pid: string) => d.members.filter((m) => m.project_id === pid && d.families.find((f) => f.id === m.family_id)?.is_admin).map((m) => uidOf(m.family_id)).filter(Boolean) as string[];
   const kindOf = (pid: string) => d.projects.find((p) => p.id === pid)?.kind || "hens";
@@ -49,12 +48,12 @@ export function buildReminders(d: Data, now: Now): Item[] {
     items.push({ userId: uid, title: "Bargeld noch einzahlen", text: `Du hast noch ${eur(late.reduce((s, t) => s + total(t), 0))} Bargeld aus Eierverkäufen einzuzahlen (seit ${oldest} Tagen).`, url: `#kasse:${kindOf(late[0].project_id)}`, prio: 1 });
   }
 
-  // 3) PayPal-Eingang noch nicht bestätigt: ab 3 Tagen, dann alle 3 Tage, an alle Familien des Projekts
+  // 3) PayPal-Eingang noch nicht bestätigt: ab 3 Tagen, dann alle 3 Tage, an die Admins (nur sie haben Zugriff auf das PayPal-Konto)
   for (const p of d.projects) {
     const pend = d.tx.filter((t) => t.project_id === p.id && !t.parent_id && t.pay_state === "pruefen" && ageDays(t.date, now.date) >= 3);
     if (!pend.some((t) => (ageDays(t.date, now.date) - 3) % 3 === 0)) continue;
     const text = `${pend.length === 1 ? "1 PayPal-Eingang" : pend.length + " PayPal-Eingänge"} (${eur(pend.reduce((s, t) => s + total(t), 0))}) ${pend.length === 1 ? "ist" : "sind"} noch nicht bestätigt${d.projects.length > 1 ? ` (${label(p)})` : ""}.`;
-    for (const uid of membersOf(p.id)) items.push({ userId: uid, title: "Zahlung prüfen", text, url: `#kasse:${p.kind}`, prio: 1 });
+    for (const uid of adminsOf(p.id)) items.push({ userId: uid, title: "Zahlung prüfen", text, url: `#kasse:${p.kind}`, prio: 1 });
   }
 
   // 4) Monatsabschluss: am 1. des Monats, wenn Abgleich oder Sicherung länger als 28 Tage her sind (nur an Admins, die dürfen beides)
