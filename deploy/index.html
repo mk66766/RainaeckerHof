@@ -1302,7 +1302,7 @@ function vKasse(){
     <button class="yolk" style="width:100%;margin-top:12px" onclick="sheetTx()">Buchung hinzufügen</button>
     <button class="alt" style="width:100%;margin-top:8px" onclick="sheetPay()">Zahlung per PayPal anfordern (QR / WhatsApp)</button>
     <button class="alt" style="width:100%;margin-top:8px" onclick="sheetPayLink()">PayPal-Link anzeigen${p.paypal ? ' (paypal.me/' + esc(p.paypal) + ')' : ''}</button>
-    <button class="alt" style="width:100%;margin-top:8px" onclick="sheetReport()">Monatsbericht teilen</button>
+    ${S.admin ? `<button class="alt" style="width:100%;margin-top:8px" onclick="sheetReport()">Monatsbericht teilen</button>` : ''}
   </div>
   ${openPayCard()}
   ${checkCard()}
@@ -1429,6 +1429,7 @@ function checkParts(){
   return {bestand, barOpen, expected: Math.round((bestand + pendSum) * 100) / 100, pendCount: pend.length, pendSum};
 }
 function checkCard(){
+  if(!S.admin) return '';
   const last = (P().cashChecks || [])[0];
   const days = last ? daysSince(ds(new Date(last.at))) : null;
   const diff = last ? Math.round((last.balance - last.expected) * 100) / 100 : 0;
@@ -1443,6 +1444,7 @@ function checkCard(){
   </div>`;
 }
 function sheetCheck(){
+  if(!S.admin) return;
   const c = checkParts();
   openSheet('Kassenabgleich', `<p class="muted" style="margin:0">Vergleicht den echten PayPal-Kontostand mit dem, was nach der App drauf sein müsste.</p>
     <div class="list" style="margin-top:8px">
@@ -1466,6 +1468,7 @@ function ckCalc(){
   const r = ckText(raw); el.textContent = r.text; el.className = r.cls; el.style.margin = '10px 0 0';
 }
 function doCheck(){
+  if(!S.admin) return;
   const raw = val('ck').trim(); if(!raw){ toast('Bitte den Kontostand eintragen'); return; }
   const bal = Math.round(num(raw) * 100) / 100, c = checkParts(), note = val('ckn').trim(), p = P();
   closeSheet();
@@ -1495,6 +1498,7 @@ function reportText(ym){
   return lines.join('\n');
 }
 function sheetReport(){
+  if(!S.admin) return;
   const opts = monthOptions(), ym = opts[1];            // Standard: letzter abgeschlossener Monat
   openSheet('Monatsbericht', `<label>Monat</label><select id="rm" onchange="repMonth(this.value)">${opts.map(m => `<option value="${m}" ${m === ym ? 'selected' : ''}>${monthName(m)}</option>`).join('')}</select>
     <label>Bericht (du kannst ihn ändern)</label><textarea id="rpt" rows="9">${esc(reportText(ym))}</textarea>
@@ -1583,7 +1587,7 @@ let payMode = 'sale', payBooked = false, payExtra = {};
 function offerPayPal(o){
   if(!(o.amount > 0)) return;
   const p = P();
-  if(!p.paypal){ sheetPay(o); return; }          // noch kein PayPal.me-Name: Formular mit vorausgefüllten Werten
+  if(!p.paypal){ if(S.admin) sheetPay(o); else toast('Der Admin muss zuerst den PayPal.me-Namen eintragen'); return; }   // noch kein PayPal.me-Name: Formular mit vorausgefüllten Werten
   pay = {name:p.paypal, amount:o.amount, base:o.amount, buyer:o.buyer || '', purpose:o.purpose || '', link:paypalLink(p.paypal, o.amount), mode:o.mode || 'sale', booked:true, txId:o.txId, method:o.method};
   showPay();
 }
@@ -1611,11 +1615,12 @@ function payMessage(x){
   return `${x.buyer ? `Hallo ${x.buyer}!` : 'Hallo!'} ${tier}\n${dank}\n\nDu kannst ganz bequem per PayPal bezahlen${betrag}:\n👉 ${x.link}\n\nLiebe Grüße vom Rainäcker Hof 💛`;
 }
 function sheetPay(o){
+  if(!P().paypal && !S.admin){ toast('Der Admin muss zuerst den PayPal.me-Namen eintragen'); return; }
   const p = P(), last = o ? o.amount.toFixed(2).replace('.', ',') : (lsGet('hof-pay-amount') || '');
   payMode = (o && o.mode) || 'sale'; payBooked = !!o; payExtra = o ? {txId:o.txId, method:o.method} : {};
   openSheet(o ? 'Bezahlung per PayPal' : 'Zahlung per PayPal anfordern', `
     ${o ? '<p class="muted" style="margin:0">Der Betrag ist schon in der Gemeinschaftskasse gebucht. Trage einmal den PayPal.me-Namen ein, dann kannst du ihn gleich bezahlen oder verschicken.</p>' : ''}
-    ${p.paypal ? `<div class="row"><span class="muted">Konto: paypal.me/${esc(p.paypal)}</span><button class="ghost" onclick="document.getElementById('ppname').style.display=''">ändern</button></div>` : ''}
+    ${p.paypal ? `<div class="row"><span class="muted">Konto: paypal.me/${esc(p.paypal)}</span>${S.admin ? `<button class="ghost" onclick="document.getElementById('ppname').style.display=''">ändern</button>` : ''}</div>` : ''}
     <div id="ppname" style="${p.paypal?'display:none':''}"><label>PayPal.me-Name der Gemeinschaft</label><input id="ppn" type="text" value="${esc(p.paypal)}" placeholder="z. B. paypal.me/rainaecker"></div>
     ${isHens() ? `<label>Anzahl Eier (optional, rechnet den Betrag aus)</label><input id="ppe" type="number" inputmode="numeric" min="0" placeholder="z. B. 10" oninput="ppCalc()">` : ''}
     <label>Betrag (€): bei jeder Zahlung frei wählbar</label><input id="ppa" type="text" inputmode="decimal" value="${esc(last)}" placeholder="z. B. 4,00">
@@ -1634,7 +1639,7 @@ function doPay(){
   const amount = Math.round(num(val('ppa')) * 100) / 100;
   pay = {name, amount, buyer: val('ppb').trim(), purpose: val('ppz').trim(), link: paypalLink(name, amount), mode: payMode, booked: payBooked, base: amount, txId: payExtra.txId, method: payExtra.method};
   lsSet('hof-pay-amount', amount > 0 ? amount.toFixed(2).replace('.', ',') : '');
-  if(name !== P().paypal) saveSetting({paypal_me: name});
+  if(name !== P().paypal && S.admin) saveSetting({paypal_me: name});
   showPay();
 }
 function payExtras(){
@@ -1674,7 +1679,7 @@ function showPay(){
 /* Den PayPal.me-Link einfach anzeigen (ohne Betrag): QR, kopieren, öffnen, per WhatsApp schicken */
 function sheetPayLink(){
   const name = P().paypal;
-  if(!name){ tab = 'hof'; render(); toast('Bitte hier zuerst den PayPal.me-Namen eintragen'); return; }
+  if(!name){ if(!S.admin){ toast('Der Admin muss zuerst den PayPal.me-Namen eintragen'); return; } tab = 'hof'; render(); toast('Bitte hier zuerst den PayPal.me-Namen eintragen'); return; }
   pay = {name, amount:0, base:0, buyer:'', purpose:'', link:paypalLink(name, 0), mode:'sale', booked:false};
   openSheet('PayPal-Link', `
     <div style="display:flex;justify-content:center;margin-top:4px"><div style="width:min(60vw,220px);border-radius:14px;overflow:hidden;border:1px solid var(--line)">${qrSvg(pay.link)}</div></div>
@@ -2037,7 +2042,7 @@ function manualCard(){
     <li>Oben stehen Einnahmen, Ausgaben und der <b>Bestand Gemeinschaftskasse</b>.${hens?' Dazu die Netto-Kosten pro Ei.':''}</li>
     <li><b>Buchung hinzufügen:</b> Bei einer <b>Ausgabe</b> (z. B. ${hens?'Futter, Streu':'Heu, Mineralfutter'}) wählst du, wer bezahlt hat, eine Familie oder die Gemeinschaftskasse. Eine <b>Einnahme</b> geht immer in die Kasse. Das Datum kannst du nachtragen.</li>
     <li>Ausgaben, die eine <b>Familie</b> bezahlt hat, werden gleichmäßig auf die Familien ${hens?'der Hühner':'der Ziegen'} verteilt. <b>Einnahmen</b> (z. B. Eierverkauf) werden <b>nicht</b> auf die Familien verteilt, sie bleiben in der Gemeinschaftskasse. Daraus bezahlt ihr Gemeinschaftsausgaben, sooft ihr wollt: Wähle bei der Ausgabe „Gemeinschaftskasse“ als Zahler. Der Erlös muss dafür nicht bei „Wer bekommt was?“ eingerechnet werden.</li>
-    <li><b>Kassenabgleich:</b> Einmal im Monat vergleicht jemand den echten PayPal-Kontostand mit dem Bestand der Gemeinschaftskasse (Karte „Kassenabgleich“, Knopf „Abgleich machen“). Die App zeigt die Differenz und merkt sich den Abgleich.</li>
+    <li><b>Kassenabgleich</b> (nur Admin): Einmal im Monat vergleicht der Admin den echten PayPal-Kontostand mit dem Bestand der Gemeinschaftskasse (Karte „Kassenabgleich“, Knopf „Abgleich machen“). Die App zeigt die Differenz und merkt sich den Abgleich.</li>
     <li><b>Wer bekommt was?</b> ist eingeklappt, weil ihr es nur bei Auszahlungen braucht. Ein Tipp öffnet es, ein Zähler daneben zeigt, wie viele Zahlungen offen sind. Dort steht der Stand je Familie, darunter die Zahlungsliste. Alle Zahlungen laufen über die Gemeinschaftskasse: Wer zahlen muss, zahlt in die Kasse ein, wer etwas bekommt, bekommt es aus der Kasse. Tippe nach der Zahlung auf <b>Eingezahlt</b> oder <b>Ausgezahlt</b>, dann verschwindet der Betrag.</li>
     <li><i>Beispiel:</i> Eine Familie kauft Futter für ${30*nFam} €. Bei ${nFam} Familien zahlen die ${nFam-1} anderen je 30 € in die Kasse, und die Kasse zahlt der Familie ${30*(nFam-1)} € zurück.</li>
     <li><b>Zahlung per PayPal anfordern:</b> Gib den Betrag ein${hens?' (oder die Anzahl Eier)':''}, optional Name und Zweck. Die App zeigt einen <b>QR-Code</b> und eine fertige Nachricht, die du ändern kannst. Sende sie mit <b>Per WhatsApp senden</b>, teile den <b>QR als Bild</b> oder kopiere den <b>Link</b>. Den Betrag wählst du bei jeder Zahlung neu. Den PayPal.me-Namen trägst du einmal ein, du findest ihn danach im Tab <b>Hof</b> unter „Zahlung“.</li></ul>`);
@@ -2050,6 +2055,7 @@ function manualCard(){
   const protokoll = manDet('hof', 'Einstellungen im Tab Hof', `<ul>
     ${hens?`<li><b>Stall:</b> Hennenbestand (mit Datum, wenn sich die Zahl ändert), Eier pro Familie und Woche (jetzt ${q}), interner Preis (leer = Selbstkostenpreis) und externer Preis für Nachbarn.</li>
     <li><b>Nachbar-Seite:</b> Hier erzeugst du mit <b>Link für Nachbarn teilen</b> eine WhatsApp-Nachricht mit dem Link zu einer öffentlichen Seite. Dort sehen Nachbarn ohne Anmeldung, wie viele Eier gerade übrig sind, den Preis und bei welcher Familie (mit Dienst) sie diese Woche Eier holen können. Nachbarn können dort auch Eier bestellen. Die Seite zeigt immer den aktuellen Stand, der Link muss nur einmal verschickt werden. Darüber trägst du einen Hinweis ein, z. B. Abholort oder Zeiten. Er erscheint auf der Seite.</li>`:''}
+    <li>Nur für den Admin sichtbar: <b>Zahlung</b>, <b>Erfassung</b>, <b>Familien</b> und <b>Daten</b>. In der Kasse sind auch <b>Kassenabgleich</b> und <b>Monatsbericht teilen</b> nur für den Admin.</li>
     <li><b>Zahlung:</b> PayPal.me-Name für den QR-Code.</li>
     <li><b>Erfassung:</b> Ab diesem Datum zählt die App.${hens?' Der <b>Live-Start</b> bestimmt, ab wann Vorrat, Überschuss und Eierpreis rechnen. Eier davor zählen nur für die Statistik.':''}</li>
     <li><b>Sichern</b> speichert eine Kopie der Daten als Datei.</li></ul>`);
@@ -2079,11 +2085,11 @@ function manualCard(){
         <li>Jeder Verkauf und jede Zusatz-Eier-Buchung zeigt in der <b>Kasse</b>, welche Familie verkauft bzw. genommen hat, und den Zahlungsstand darunter.</li>
         <li><b>Bargeld offen</b>: Die verkaufende Familie hat das Bargeld und zahlt es per PayPal in die Gemeinschaftskasse ein. Danach tippt sie auf <b>Eingezahlt</b>.</li>
         <li><b>Eingang prüfen:</b> Der Betrag soll auf dem PayPal-Konto sein (vom Nachbarn bezahlt oder von der Familie eingezahlt). Wer ins Konto schaut, tippt auf <b>Eingang bestätigt</b> und trägt ein, was angekommen ist. <b>Mehr</b> als erwartet wird als Trinkgeld gebucht, <b>weniger</b> lässt die Zahlung offen.</li>
-        <li>Den <b>PayPal-Link</b> der Gemeinschaftskasse siehst du im Tab <b>Hof</b> unter „Zahlung“ und in der <b>Kasse</b> mit dem Knopf <b>PayPal-Link anzeigen</b>. Dort kannst du ihn kopieren, den QR-Code zeigen oder ihn per WhatsApp schicken.</li>
+        <li>Den <b>PayPal-Link</b> der Gemeinschaftskasse siehst du in der <b>Kasse</b> mit dem Knopf <b>PayPal-Link anzeigen</b> (der Admin auch im Tab <b>Hof</b> unter „Zahlung“). Dort kannst du ihn kopieren, den QR-Code zeigen oder ihn per WhatsApp schicken.</li>
         <li>Die Karte <b>Offene Zahlungen</b> in der Kasse zeigt, wer noch Bargeld einzuzahlen hat und welche Eingänge zu prüfen sind. Ältere Buchungen ohne Zahlungsstand lassen sich mit <b>Erfassen</b> nachtragen.</li>
         <li>Trinkgeld bar: Beim Verkauf bei <b>Erhalten</b> den echten Betrag eintragen, die Differenz wird als eigene Trinkgeld-Buchung in die Gemeinschaftskasse gebucht. Trinkgeld per PayPal: Im Bezahlfenster mit dem Knopf „Auf … aufrunden“ einen höheren Betrag verlangen.</li>
         <li><b>Bestand:</b> Verkäufe und Zusatz-Eier zählen erst zum Bestand der Gemeinschaftskasse, wenn der Geldeingang bestätigt ist. Bis dahin steht der Betrag unter dem Bestand als „warten auf die Bestätigung“. Von Hand gebuchte Einnahmen zählen sofort.</li>
-        <li><b>Kassenabgleich:</b> Einmal im Monat trägt jemand den echten PayPal-Kontostand ein. Die App vergleicht ihn mit dem Bestand plus den Eingängen, die schon auf dem Konto sein sollten, zeigt die Differenz und merkt sich den Abgleich. Kleine Abweichungen können PayPal-Gebühren sein.</li></ul>`),
+        <li><b>Kassenabgleich</b> (nur Admin): Einmal im Monat trägt der Admin den echten PayPal-Kontostand ein. Die App vergleicht ihn mit dem Bestand plus den Eingängen, die schon auf dem Konto sein sollten, zeigt die Differenz und merkt sich den Abgleich. Kleine Abweichungen können PayPal-Gebühren sein.</li></ul>`),
       manDet('familien', 'Familien verwalten (nur Verwalter)', `<ul>
         <li>Im Tab <b>Hof</b> steht für Verwalter die Karte <b>Familien</b>. Mit <b>Hinzufügen</b> nimmst du eine neue Familie auf: Name, 6-stelliger Code und die Projekte, bei denen sie dabei ist. Sie meldet sich danach mit ihrem Namen und dem Code an.</li>
         <li>Mit <b>Bearbeiten</b> änderst du die Projekte einer Familie, vergibst mit <b>Code ändern</b> einen neuen Zugangscode (zum Beispiel wenn er vergessen wurde), machst sie zum Verwalter oder entziehst ihr das Recht, oder wählst <b>Aus dem Hof entfernen</b>. Es muss immer mindestens ein Verwalter bleiben.</li>
@@ -2094,7 +2100,7 @@ function manualCard(){
       manDet('push', 'Benachrichtigungen aufs Handy', `<ul>
         <li>Im Tab <b>Hof</b> tippst du bei „Benachrichtigungen“ auf <b>Benachrichtigungen einschalten</b> und erlaubst die Nachrichten. Danach bekommst du eine Nachricht aufs Handy, sobald ein Nachbar Eier bestellt. Ein Tipp darauf öffnet die App bei den Bestellungen.</li>
         <li>Jede Familie schaltet das auf ihrem <b>eigenen Handy</b> ein. Mit <b>Test senden</b> prüfst du, ob es ankommt, und mit <b>Ausschalten</b> hörst du wieder auf.</li>
-        <li><b>Erinnerungen:</b> Um 18 Uhr schickt der Hof eine Nachricht, wenn etwas ansteht: am Sonntag „Nächste Woche hast du Dienst“, dazu Bargeld, das seit einer Woche nicht eingezahlt ist, PayPal-Eingänge, die seit drei Tagen auf Bestätigung warten, und am 1. des Monats Abgleich und Sicherung. Ein Tipp auf die Nachricht öffnet die passende Seite. In der Karte „Benachrichtigungen“ schaltest du die Erinnerungen auf diesem Gerät mit <b>Ausschalten</b> ab, die Bestell-Nachrichten bleiben davon unberührt.</li>
+        <li><b>Erinnerungen:</b> Um 18 Uhr schickt der Hof eine Nachricht, wenn etwas ansteht: am Sonntag „Nächste Woche hast du Dienst“, dazu Bargeld, das seit einer Woche nicht eingezahlt ist, PayPal-Eingänge, die seit drei Tagen auf Bestätigung warten, und am 1. des Monats (nur an den Admin) Abgleich und Sicherung. Ein Tipp auf die Nachricht öffnet die passende Seite. In der Karte „Benachrichtigungen“ schaltest du die Erinnerungen auf diesem Gerät mit <b>Ausschalten</b> ab, die Bestell-Nachrichten bleiben davon unberührt.</li>
         <li><b>iPhone:</b> Das geht nur ab iOS 16.4 und nur, wenn die App auf dem Home-Bildschirm liegt (Teilen-Symbol, „Zum Home-Bildschirm“). Öffne die App dann von dort.</li>
         <li>Nach dem <b>Abmelden</b> kommen auf diesem Handy keine Nachrichten mehr. Beim nächsten Anmelden mit derselben Familie sind sie wieder aktiv.</li></ul>`),
       manDet('anspruch', 'Wochenanspruch, Entnehmen und Verzichten', `<ul>
@@ -2186,7 +2192,7 @@ function vHof(){
     <button class="yolk" style="width:100%;margin-top:12px" onclick="sheetNeighbors()">Link für Nachbarn teilen (WhatsApp)</button>
   </div>` : ''}
   ${isHens() ? pushCard() : ''}
-  <div class="card">
+  ${S.admin ? `<div class="card">
     <h2>Zahlung</h2>
     <label class="muted" style="display:block">PayPal.me-Name oder Link (für den Zahlungs-QR-Code in der Kasse)</label>
     <input type="text" placeholder="z. B. paypal.me/rainaecker" value="${esc(p.paypal)}" onchange="saveSetting({paypal_me:normPaypal(this.value)||null})">
@@ -2201,21 +2207,22 @@ function vHof(){
     ${isHens() ? `<label class="muted" style="display:block;margin-top:12px">Vorrat, Überschuss und Eierpreis zählen ab (Live-Start)</label>
     <input type="date" value="${p.live}" onchange="saveSetting({live_start:this.value||null})">
     <p class="muted" style="margin:8px 0 0">Eier davor zählen nur für die Statistik. Sie landen nicht im Vorrat und nicht im Überschuss.</p>` : ''}
-  </div>
+  </div>` : ''}
   ${famCard()}
   ${auditCard()}
-  <div class="card">
+  ${S.admin ? `<div class="card">
     <h2>Daten</h2>
     <p class="muted" style="margin-top:0">Alle Familien dieses Projekts sehen dieselben Daten. Mit „Sichern“ speicherst du eine Kopie als Datei.</p>
     ${(() => { const b = backupInfo(); return `<p style="margin:0 0 10px;font-size:14px" class="${b.late ? 'neg' : 'muted'}">${b.d ? `Letzte Sicherung: ${fmtDay(parseD(b.d))}${b.days >= 31 ? ` (vor ${b.days} Tagen, Zeit für eine neue)` : ''}` : 'Noch keine Sicherung gemacht. Bitte jetzt eine speichern.'}</p>`; })()}
     <button class="alt" style="width:100%" onclick="exportData()">Sichern</button>
-  </div>`;
+  </div>` : ''}`;
 }
 function backupInfo(){
   const d = P().lastBackup, days = d ? daysSince(d) : null;
   return {d, days, late: days === null || days >= 31};
 }
 function exportData(){
+  if(!S.admin) return;
   const p = P();
   const out = {exportiert:new Date().toISOString(), projekt:p.name, mitglieder:p.members.map(id=>fam(id).name),
     eier:p.log, buchungen:p.tx, dienst_tausch:p.swaps, tuer:p.door.history, tiere:p.animals, gesundheit:p.health, vorraete:p.supplies};
