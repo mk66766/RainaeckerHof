@@ -19,6 +19,8 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Goldenes Ei auf grünen Hügeln mit dem Schriftzug Rainäcker Hof">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -27,8 +29,8 @@
   color-scheme: light;
   --bg:#EDF1E8; --surface:#FFFFFF; --ink:#1E2A22; --muted:#66746B; --line:#D5DDCF;
   --yolk:#F4B400; --yolk-ink:#2B2000; --good:#2E7D4F; --bad:#B3402F;
-  --head:'Trebuchet MS',system-ui,-apple-system,'Segoe UI',sans-serif;
-  --body:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --head:'Bricolage Grotesque','Trebuchet MS',system-ui,sans-serif;
+  --body:'Figtree',system-ui,-apple-system,'Segoe UI',sans-serif;
 }
 @media (prefers-color-scheme: dark){
   :root{
@@ -46,9 +48,19 @@ header{display:flex;align-items:center;gap:12px;margin-bottom:16px}
 h1{font-family:var(--head);font-size:26px;line-height:1.1;margin:0;font-weight:800}
 .sub{color:var(--muted);font-size:15px;margin-top:2px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px}
-.big{display:flex;align-items:baseline;gap:10px}
-.num{font-family:var(--head);font-weight:800;font-size:72px;line-height:1}
-.num.zero{color:var(--muted)}
+.hero{text-align:center;padding:24px 18px 20px}
+.egg{width:150px;height:186px;margin:0 auto;border-radius:50% 50% 50% 50% / 62% 62% 38% 38%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at 33% 24%, rgba(255,255,255,.5) 0, rgba(255,255,255,0) 30%), var(--yolk);color:var(--yolk-ink);
+  box-shadow:0 14px 24px -10px rgba(0,0,0,.45), inset -10px -14px 0 rgba(0,0,0,.08)}
+.egg.zero{background:radial-gradient(ellipse at 33% 24%, rgba(255,255,255,.35) 0, rgba(255,255,255,0) 30%), var(--line);color:var(--muted)}
+.egg .unit{font-size:18px;font-weight:600;margin-top:2px}
+.hero .state{margin-top:16px}
+.hi{margin-right:7px}
+.step{display:flex;gap:8px}
+.step input{flex:1;text-align:center;font-size:20px;font-weight:600;min-width:0}
+.step button{flex:none;width:56px;font-size:26px;line-height:1;padding:0;background:var(--bg);color:var(--ink);border:1.5px solid var(--line)}
+button.alt{background:var(--surface);color:var(--ink);border:1.5px solid var(--line)}
+.num{font-family:var(--head);font-weight:800;font-size:64px;line-height:1}
 .unit{font-size:22px;font-weight:600}
 .state{margin:6px 0 0;color:var(--muted);font-size:16px}
 .row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
@@ -80,12 +92,12 @@ button:disabled{opacity:.5;cursor:default}
 <body>
 <main>
   <header>
-    <svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#263829"/><path d="M32 12c-8 0-14 11-14 21a14 14 0 0 0 28 0c0-10-6-21-14-21z" fill="#F4B400"/><ellipse cx="25" cy="24" rx="4.5" ry="7" fill="#FFD65A" opacity=".55"/></svg>
-    <div><h1>Rainäcker Hof</h1><div class="sub">Frische Eier</div></div>
+    <img class="logo" src="/favicon.svg" alt="">
+    <div><h1>Rainäcker Hof</h1><div class="sub">🐔 Frische Eier vom Hof</div></div>
   </header>
 
-  <section class="card" aria-live="polite">
-    <div class="big"><span class="num zero" id="num">–</span><span class="unit" id="unit">Eier</span></div>
+  <section class="card hero" aria-live="polite">
+    <div class="egg zero" id="egg"><span class="num" id="num">–</span><span class="unit" id="unit">Eier</span></div>
     <p class="state" id="state">Lade aktuellen Stand …</p>
   </section>
 
@@ -94,17 +106,17 @@ button:disabled{opacity:.5;cursor:default}
     <div class="row"><span>📍 Abholung bei</span><strong id="duty">–</strong></div>
   </section>
 
-  <section class="card note" id="notebox" hidden><h2>Hinweis</h2><div id="note"></div></section>
+  <section class="card note" id="notebox" hidden><h2><span class="hi" aria-hidden="true">📝</span>Hinweis</h2><div id="note"></div></section>
 
   <section class="card thanks" id="thanks" hidden aria-live="polite"><strong id="thanksTitle"></strong><p class="hint" id="thanksText" style="font-size:16px;color:inherit"></p></section>
 
   <section class="card" id="orderbox" hidden>
-    <h2>Eier bestellen</h2>
+    <h2><span class="hi" aria-hidden="true">🛒</span>Eier bestellen</h2>
     <form id="orderform" novalidate>
       <label for="who">Familie</label>
       <input id="who" type="text" maxlength="80" autocomplete="name" required>
       <label for="qty">Anzahl Eier</label>
-      <input id="qty" type="number" inputmode="numeric" min="1" max="100" required>
+      <div class="step"><button type="button" onclick="stepQty(-1)" aria-label="weniger">−</button><input id="qty" type="number" inputmode="numeric" min="1" max="100" required><button type="button" onclick="stepQty(1)" aria-label="mehr">+</button></div>
       <div class="hp" aria-hidden="true"><label for="hp">Bitte leer lassen</label><input id="hp" type="text" tabindex="-1" autocomplete="off"></div>
       <button class="yolk" id="send" type="submit">Bestellen</button>
       <p class="msg" id="orderMsg" role="status"></p>
@@ -112,7 +124,7 @@ button:disabled{opacity:.5;cursor:default}
     <p class="hint">Deine Eier werden für dich zurückgelegt. Du holst sie bei der Familie ab, die oben steht.</p>
   </section>
 
-  <button id="reload" type="button">Aktualisieren</button>
+  <button id="reload" class="alt" type="button">↻ Aktualisieren</button>
   <p class="foot" id="stand"></p>
 </main>
 
@@ -124,12 +136,13 @@ const $ = id => document.getElementById(id);
 let last = {n:0, duty:''};
 const NAME_KEY = 'hof-nachbar-name';
 const store = { get(){ try{ return localStorage.getItem(NAME_KEY) || ''; }catch(e){ return ''; } }, set(v){ try{ localStorage.setItem(NAME_KEY, v); }catch(e){} } };
+function stepQty(d){ const q = $('qty'); q.value = Math.min(Number(q.max) || 100, Math.max(1, (parseInt(q.value) || 0) + d)); }
 const eur = n => Number(n).toLocaleString('de-DE', {style:'currency', currency:'EUR'});
 
 function show(d){
   const n = Math.max(0, Math.floor(Number(d.available) || 0));
   const num = $('num');
-  num.textContent = n; num.classList.toggle('zero', n === 0);
+  num.textContent = n; $('egg').classList.toggle('zero', n === 0);
   $('unit').textContent = n === 1 ? 'Ei' : 'Eier';
   $('state').textContent = n > 0 ? (n === 1 ? 'ist gerade verfügbar.' : 'sind gerade verfügbar.') : 'Gerade sind keine Eier übrig. Schau später gern noch einmal vorbei.';
   $('state').classList.remove('err');
@@ -147,7 +160,7 @@ function show(d){
   $('stand').textContent = 'Stand: ' + t.toLocaleDateString('de-DE', {day:'numeric', month:'long'}) + ', ' + t.toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'}) + ' Uhr';
 }
 function fail(){
-  $('num').textContent = '–'; $('num').classList.add('zero'); $('unit').textContent = '';
+  $('num').textContent = '–'; $('egg').classList.add('zero'); $('unit').textContent = '';
   $('state').textContent = 'Der Stand konnte gerade nicht geladen werden. Bitte versuche es gleich noch einmal.';
   $('state').classList.add('err');
   $('details').hidden = true; $('notebox').hidden = true; $('orderbox').hidden = true; $('stand').textContent = '';

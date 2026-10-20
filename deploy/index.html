@@ -246,6 +246,11 @@ const sb = supabase.createClient(CONFIG.url, CONFIG.key);
 
 /* ================= Zustand ================= */
 let S = {user:null, me:null, admin:false, fams:[], projects:[], cur:null, p:null};
+// Darstellung je Handy: automatisch (wie das Handy), immer hell oder immer dunkel
+const themeNow = () => { try{ const t = localStorage.getItem('hof-theme'); return t === 'light' || t === 'dark' ? t : 'auto'; }catch(e){ return 'auto'; } };
+function applyTheme(t){ if(t === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t; }
+function setTheme(t){ try{ if(t === 'auto') localStorage.removeItem('hof-theme'); else localStorage.setItem('hof-theme', t); }catch(e){} applyTheme(t); render(); }
+applyTheme(themeNow());
 const P = () => S.p;
 const isHens = () => S.p.kind === 'hens';
 
@@ -2184,6 +2189,7 @@ function manualCard(){
   const protokoll = manDet('hof', 'Einstellungen im Tab Hof', `<ul>
     ${hens?`<li><b>Stall:</b> Hennenbestand (mit Datum, wenn sich die Zahl ändert), Eier pro Familie und Woche (jetzt ${q}), interner Preis (leer = Selbstkostenpreis) und externer Preis für Nachbarn.</li>
     <li><b>Nachbar-Seite:</b> Hier erzeugst du mit <b>Link für Nachbarn teilen</b> eine WhatsApp-Nachricht mit dem Link zu einer öffentlichen Seite. Dort sehen Nachbarn ohne Anmeldung, wie viele Eier gerade übrig sind, den Preis und bei welcher Familie (mit Dienst) sie diese Woche Eier holen können. Nachbarn können dort auch Eier bestellen. Die Seite zeigt immer den aktuellen Stand, der Link muss nur einmal verschickt werden. Darüber trägst du einen Hinweis ein, z. B. Abholort oder Zeiten. Er erscheint auf der Seite.</li>`:''}
+    <li><b>Darstellung:</b> <b>Automatisch</b> folgt dem Handy (hell oder dunkel), mit <b>Hell</b> oder <b>Dunkel</b> legst du es für dieses Handy fest.</li>
     <li>Nur für den Admin sichtbar: die eingeklappten <b>Einstellungen</b> (${hens?'Stall, ':''}Zahlung, Erfassung), <b>Familien</b> und <b>Daten</b>. In der Kasse sind auch <b>Kassenabgleich</b> und <b>Monatsbericht teilen</b> nur für den Admin.</li>
     <li><b>Zahlung:</b> PayPal.me-Name für den QR-Code.</li>
     <li><b>Erfassung:</b> Ab diesem Datum zählt die App.${hens?' Der <b>Live-Start</b> bestimmt, ab wann Vorrat, Überschuss und Eierpreis rechnen. Eier davor zählen nur für die Statistik.':''}</li>
@@ -2315,6 +2321,11 @@ function vHof(){
     <button class="yolk" style="width:100%;margin-top:12px" onclick="sheetNeighbors()">Link für Nachbarn teilen (WhatsApp)</button>
   </div>` : ''}
   ${isHens() ? pushCard() : ''}
+  <div class="card">
+    <h2><span class="hi" aria-hidden="true">🌓</span>Darstellung</h2>
+    <div class="seg">${[['auto','Automatisch'],['light','Hell'],['dark','Dunkel']].map(([k,l]) => `<button class="${themeNow()===k?'on':''}" aria-pressed="${themeNow()===k}" onclick="setTheme('${k}')">${l}</button>`).join('')}</div>
+    <p class="muted" style="margin:8px 0 0">Automatisch folgt der Einstellung des Handys. Die Wahl gilt nur auf diesem Handy.</p>
+  </div>
   ${S.admin ? `<details class="card" ${setOpen?'open':''} ontoggle="setOpen=this.open">
     <summary><h2 style="margin:0"><span class="hi" aria-hidden="true">⚙️</span>Einstellungen</h2><span class="pill">nur Admin</span></summary>
   ${isHens() ? `<div>
