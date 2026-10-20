@@ -1617,7 +1617,7 @@ function payMessage(x){
 function sheetPay(o){
   if(!P().paypal && !S.admin){ toast('Der Admin muss zuerst den PayPal.me-Namen eintragen'); return; }
   const p = P(), last = o ? o.amount.toFixed(2).replace('.', ',') : (lsGet('hof-pay-amount') || '');
-  payMode = (o && o.mode) || 'sale'; payBooked = !!o; payExtra = o ? {txId:o.txId, method:o.method} : {};
+  payMode = (o && o.mode) || 'sale'; payBooked = !!o; payExtra = o ? {txId:o.txId, method:o.method, purpose:o.purpose || ''} : {};
   openSheet(o ? 'Bezahlung per PayPal' : 'Zahlung per PayPal anfordern', `
     ${o ? '<p class="muted" style="margin:0">Der Betrag ist schon in der Gemeinschaftskasse gebucht. Trage einmal den PayPal.me-Namen ein, dann kannst du ihn gleich bezahlen oder verschicken.</p>' : ''}
     ${p.paypal ? `<div class="row"><span class="muted">Konto: paypal.me/${esc(p.paypal)}</span>${S.admin ? `<button class="ghost" onclick="document.getElementById('ppname').style.display=''">ändern</button>` : ''}</div>` : ''}
@@ -1625,19 +1625,19 @@ function sheetPay(o){
     ${isHens() ? `<label>Anzahl Eier (optional, rechnet den Betrag aus)</label><input id="ppe" type="number" inputmode="numeric" min="0" placeholder="z. B. 10" oninput="ppCalc()">` : ''}
     <label>Betrag (€): bei jeder Zahlung frei wählbar</label><input id="ppa" type="text" inputmode="decimal" value="${esc(last)}" placeholder="z. B. 4,00">
     <label>Name des Käufers (optional)</label><input id="ppb" type="text" placeholder="z. B. Familie Meier" value="${o ? esc(o.buyer || '') : ''}">
-    <label>Wofür? (optional)</label><input id="ppz" type="text" placeholder="z. B. 10 frische Eier" oninput="this.dataset.touched=1" value="${o ? esc(o.purpose || '') : ''}">
     <div class="actions"><button class="alt" onclick="closeSheet()">Abbrechen</button><button class="yolk" onclick="doPay()">Weiter</button></div>`);
 }
 function ppCalc(){
   const n = parseInt(val('ppe')) || 0; if(n < 1) return;
   document.getElementById('ppa').value = (n * P().price).toFixed(2).replace('.', ',');
-  const z = document.getElementById('ppz'); if(!z.dataset.touched) z.value = `${n} Ei${n===1?'':'er'}`;
 }
 function doPay(){
   const name = normPaypal(val('ppn'));
   if(!name){ toast('Bitte den PayPal.me-Namen eintragen'); document.getElementById('ppname').style.display = ''; return; }
   const amount = Math.round(num(val('ppa')) * 100) / 100;
-  pay = {name, amount, buyer: val('ppb').trim(), purpose: val('ppz').trim(), link: paypalLink(name, amount), mode: payMode, booked: payBooked, base: amount, txId: payExtra.txId, method: payExtra.method};
+  const eggs = parseInt((document.getElementById('ppe') || {}).value) || 0;              // Zweck für die Nachricht: aus dem Verkauf oder der Eieranzahl
+  const purpose = payExtra.purpose || (eggs > 0 ? `${eggs} Ei${eggs===1?'':'er'}` : '');
+  pay = {name, amount, buyer: val('ppb').trim(), purpose, link: paypalLink(name, amount), mode: payMode, booked: payBooked, base: amount, txId: payExtra.txId, method: payExtra.method};
   lsSet('hof-pay-amount', amount > 0 ? amount.toFixed(2).replace('.', ',') : '');
   if(name !== P().paypal && S.admin) saveSetting({paypal_me: name});
   showPay();
@@ -2045,7 +2045,7 @@ function manualCard(){
     <li><b>Kassenabgleich</b> (nur Admin): Einmal im Monat vergleicht der Admin den echten PayPal-Kontostand mit dem Bestand der Gemeinschaftskasse (Karte „Kassenabgleich“, Knopf „Abgleich machen“). Die App zeigt die Differenz und merkt sich den Abgleich.</li>
     <li><b>Wer bekommt was?</b> ist eingeklappt, weil ihr es nur bei Auszahlungen braucht. Ein Tipp öffnet es, ein Zähler daneben zeigt, wie viele Zahlungen offen sind. Dort steht der Stand je Familie, darunter die Zahlungsliste. Alle Zahlungen laufen über die Gemeinschaftskasse: Wer zahlen muss, zahlt in die Kasse ein, wer etwas bekommt, bekommt es aus der Kasse. Tippe nach der Zahlung auf <b>Eingezahlt</b> oder <b>Ausgezahlt</b>, dann verschwindet der Betrag.</li>
     <li><i>Beispiel:</i> Eine Familie kauft Futter für ${30*nFam} €. Bei ${nFam} Familien zahlen die ${nFam-1} anderen je 30 € in die Kasse, und die Kasse zahlt der Familie ${30*(nFam-1)} € zurück.</li>
-    <li><b>Zahlung per PayPal anfordern:</b> Gib den Betrag ein${hens?' (oder die Anzahl Eier)':''}, optional Name und Zweck. Die App zeigt einen <b>QR-Code</b> und eine fertige Nachricht, die du ändern kannst. Sende sie mit <b>Per WhatsApp senden</b>, teile den <b>QR als Bild</b> oder kopiere den <b>Link</b>. Den Betrag wählst du bei jeder Zahlung neu. Den PayPal.me-Namen trägst du einmal ein, du findest ihn danach im Tab <b>Hof</b> unter „Zahlung“.</li></ul>`);
+    <li><b>Zahlung per PayPal anfordern:</b> Gib den Betrag ein${hens?' (oder die Anzahl Eier)':''}, optional den Namen. Die App zeigt einen <b>QR-Code</b> und eine fertige Nachricht, die du ändern kannst. Sende sie mit <b>Per WhatsApp senden</b>, teile den <b>QR als Bild</b> oder kopiere den <b>Link</b>. Den Betrag wählst du bei jeder Zahlung neu. Den PayPal.me-Namen trägst du einmal ein, du findest ihn danach im Tab <b>Hof</b> unter „Zahlung“.</li></ul>`);
   const kalender = manDet('kalender', 'Kalender, Dienst und Termine', `<ul>
     <li>Im Tab <b>Dienst</b> zeigt der <b>Kalender</b> den Monat. Mit ‹ und › blätterst du.</li>
     <li><b>Links jeder Wochenzeile</b> stehen die Kalenderwoche und die Familie mit Dienst. Gelb ist deine Familie. Ein Tipp darauf <b>tauscht den Dienst</b> dieser Woche.</li>
