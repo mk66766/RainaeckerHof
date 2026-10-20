@@ -79,6 +79,7 @@ Pro Familie ein Supabase-Auth-Nutzer `<familienname-klein>@huehner.local` mit 6-
 - Datenbankänderungen an echten Daten nur nach Rückfrage. Nichts löschen, was Familien eingetragen haben.
 
 ## Konventionen
+- Git: Änderungen direkt auf `main` pushen (so mit dem Nutzer vereinbart), keine eigenen Claude-Branches.
 - UI-Texte Deutsch, Beträge in Euro (`de-DE`), Datum lokal. Dark Mode per `prefers-color-scheme`.
 - Keine localStorage-Abhängigkeit außer Supabase-Session und dem zuletzt gewählten Projekt.
 - Nach Änderungen: Syntax prüfen und die Rechenlogik (Kasse, Überschuss, Statistik) mit Beispieldaten testen.
