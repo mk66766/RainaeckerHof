@@ -155,6 +155,14 @@ nav{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:
 nav button{flex:1;background:none;color:var(--muted);border-radius:10px;padding:8px 2px;font-size:14px;display:flex;flex-direction:column;align-items:center;gap:2px}
 nav button{position:relative}
 nav button svg{width:24px;height:24px}
+.step{display:flex;gap:8px;align-items:stretch}
+.step input{flex:1;text-align:center;font-size:20px;font-weight:600;min-width:0}
+.step button{flex:none;width:56px;font-size:26px;line-height:1;padding:0}
+details.info{margin-top:10px}
+details.info>summary{list-style:none;cursor:pointer;color:var(--muted);font-size:14px;display:inline-block;padding:4px 0}
+details.info>summary::-webkit-details-marker{display:none}
+details.info[open]>summary{margin-bottom:4px}
+.dutynote{border:2px solid var(--yolk);padding:12px 16px}
 .nbadge{position:absolute;top:2px;left:calc(50% + 8px);min-width:17px;height:17px;padding:0 5px;border-radius:99px;background:#D9534F;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1}
 nav button[aria-current="page"]{color:var(--ink);background:color-mix(in srgb,var(--yolk) 28%,transparent)}
 .sheetbg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10;display:flex;align-items:flex-end;justify-content:center}
@@ -247,7 +255,7 @@ function ask(text, o = {}){
       ${o.tag ? `<span class="tag">${esc(o.tag)}</span><br>` : ''}
       <h3 id="dlgT">${esc(o.title || 'Bitte bestätigen')}</h3>
       <p id="dlgD">${esc(text)}</p>
-      <div class="btns"><button class="alt" data-v="0">${esc(o.cancel || 'Abbrechen')}</button><button class="${o.danger ? 'danger' : 'yolk'}" data-v="1">${esc(o.ok || 'OK')}</button></div></div>`;
+      <div class="btns">${o.cancel === false ? '' : `<button class="alt" data-v="0">${esc(o.cancel || 'Abbrechen')}</button>`}<button class="${o.danger ? 'danger' : 'yolk'}" data-v="1">${esc(o.ok || 'OK')}</button></div></div>`;
     const key = e => { if(e.key === 'Escape') done(false); };
     const done = v => { document.removeEventListener('keydown', key); bg.remove(); resolve(v); };
     bg.addEventListener('click', e => { if(e.target === bg) done(false); });
@@ -259,6 +267,19 @@ function ask(text, o = {}){
 }
 const lsGet = k => { try{ return localStorage.getItem(k); }catch(e){ return null; } };
 const lsSet = (k,v) => { try{ localStorage.setItem(k,v); }catch(e){} };
+// Zahlenfeld mit − und + (am Handy leichter als Tippen)
+function stepper(id, value, min, max, extra){
+  return `<div class="step"><button type="button" class="alt" onclick="stepBy('${id}',-1)" aria-label="weniger">−</button><input id="${id}" type="number" inputmode="numeric" min="${min}"${max !== undefined ? ` max="${max}"` : ''} value="${value}"${extra || ''}><button type="button" class="alt" onclick="stepBy('${id}',1)" aria-label="mehr">+</button></div>`;
+}
+function stepBy(id, d){
+  const el = document.getElementById(id); if(!el) return;
+  let v = (parseInt(el.value) || 0) + d;
+  if(el.min !== '' && v < Number(el.min)) v = Number(el.min);
+  if(el.max !== '' && v > Number(el.max)) v = Number(el.max);
+  el.value = v; el.dispatchEvent(new Event('input'));
+}
+// Erklärtext zum Aufklappen
+const info = (text, label) => `<details class="info"><summary>ⓘ ${label || 'Erklärung'}</summary><p class="muted" style="margin:0">${text}</p></details>`;
 
 /* ================= Datenzugriff ================= */
 async function ok(res){ if(res.error) throw res.error; return res.data; }
@@ -412,13 +433,14 @@ function render(){
   if(!tabs.some(t=>t[0]===tab)) tab = tabs[0][0];
   const nav = document.getElementById('nav'); nav.style.display = 'flex';
   nav.innerHTML = tabs.map(([k,l,i]) =>
-    `<button onclick="tab='${k}';render();window.scrollTo(0,0)" ${tab===k?'aria-current="page"':''}>${ic[i]}<span>${l}</span>${k==='eier' && openOrders().length ? `<span class="nbadge" aria-label="${openOrders().length} offene Bestellungen">${openOrders().length}</span>` : ''}</button>`).join('');
+    `<button onclick="tab='${k}';render();window.scrollTo(0,0)" ${tab===k?'aria-current="page"':''}>${ic[i]}<span>${l}</span>${k==='eier' && openOrders().length ? `<span class="nbadge" aria-label="${openOrders().length} offene Bestellungen">${openOrders().length}</span>` : ''}${k==='kasse' && kasseTodo() ? `<span class="nbadge" aria-label="${kasseTodo()} offene Zahlungen für dich">${kasseTodo()}</span>` : ''}</button>`).join('');
   const views = {eier:vEier, dienst:vDienst, kasse:vKasse, hof:vHof, tiere:vTiere, gesund:vGesund};
   document.getElementById('app').innerHTML = `
     <div class="top"><h1>Unser Rainäcker Hof</h1>
       <div class="me">${esc(fam(S.me).name)}</div></div>
     ${S.projects.length>1 ? `<div class="projects" role="tablist">${S.projects.map(p=>`<button role="tab" class="${p.id===S.cur?'on':''}" aria-selected="${p.id===S.cur}" onclick="setProject('${p.id}')">${esc(p.name)}</button>`).join('')}</div>` : ''}` + views[tab]();
   const ws = document.getElementById('weekscroll'); if(ws) ws.scrollLeft = ws.scrollWidth;   // Wochenbalken: laufende Woche rechts im Blick
+  weekDutyPopup();
 }
 
 /* ================= Sheets ================= */
@@ -468,7 +490,7 @@ async function addLaid(n, date, manual){
 function vEier(){
   const p = P(), t = today(), n = laidOn(t), st = stock(), wkLaid = weekStats(monday(new Date())).laid, dutyF = dutyFam(monday(new Date()));
   const recent = [...p.log].sort((a,b)=> b.date.localeCompare(a.date) || String(b.at||'').localeCompare(String(a.at||'')) || String(b.id).localeCompare(String(a.id))).slice(0,20);
-  return `
+  return `${dutyNote()}
   <div class="card hero">
     <div class="duty ${dutyF===S.me?'mine':''}"><span>Dienst KW ${isoWeek(monday(new Date()))}</span><b>${esc(fam(dutyF).name)}</b></div>
     <button class="egg" onclick="if(navigator.vibrate)navigator.vibrate(30);addLaid(1,today())" aria-label="Ein Ei mehr eintragen"><span class="n">${n}</span><span class="l">heute gelegt · +1</span></button>
@@ -636,20 +658,20 @@ function weekCard(){
       <button class="alt" onclick="sheetSale()" ${avail<1?'disabled':''}>An Nachbarn verkaufen</button>
     </div>
     <button class="ghost" style="margin-top:6px" onclick="sheetLaid()">Eier nachtragen</button>
-    <p class="muted" style="margin:10px 0 0">So läuft es: Zuerst können die Familien Zusatz-Eier zum internen Preis nehmen. Was übrig bleibt, geht an die Nachbarn. Alle Einnahmen gehen in die Gemeinschaftskasse.</p>
+    ${info('Zuerst können die Familien Zusatz-Eier zum internen Preis nehmen. Was übrig bleibt, geht an die Nachbarn. Alle Einnahmen gehen in die Gemeinschaftskasse.', 'So läuft es')}
   </div>
   <div class="card">
     <div class="row"><h2 style="margin:0">Diese Woche</h2><span class="muted">${fmtDay(w.from)} – ${fmtDay(w.to)}</span></div>
     <p class="muted" style="margin:6px 0 4px">Gelegt: ${w.laid} · Anspruch aller Familien: ${w.total}${short>0?` · es fehlen noch ${short}`:''}</p>
-    <div class="list">${members().map(f => {
+    <div class="list">${[...members()].sort((a,b) => (b.id===S.me) - (a.id===S.me)).map(f => {
       const t = w.taken[f.id]||0, wv = w.waived[f.id]||0, ent = q - wv;
       const pct = ent>0 ? Math.min(100, Math.round(t/ent*100)) : 0, left = Math.max(0, ent-t), extra = Math.max(0, t-ent) + (w.zus[f.id]||0);
-      return `<div class="item" style="align-items:flex-start"><div style="flex:1">
-        <div class="row"><strong>${esc(f.name)}</strong><span>${ent===0&&t===0?'verzichtet':`${t} von ${ent}`}${wv&&ent>0?` <span class="pill">Verzicht ${wv}</span>`:''}${extra?` <span class="pill">+${extra} Zusatz</span>`:''}</span></div>
+      return `<div class="item" style="flex-direction:column;align-items:stretch;gap:8px"><div>
+        <div class="row"><strong>${esc(f.name)}${f.id===S.me?' <span class="muted">(du)</span>':''}</strong><span>${ent===0&&t===0?'verzichtet':`${t} von ${ent}`}${wv&&ent>0?` <span class="pill">Verzicht ${wv}</span>`:''}${extra?` <span class="pill">+${extra} Zusatz</span>`:''}</span></div>
         <div class="meter"><i class="${ent>0&&t>=ent?'full':''}" style="width:${pct}%"></i></div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:6px;min-width:104px">
-          <button class="alt small" onclick="sheetTake('${f.id}',${left||1})">Entnehmen</button>
+        <div class="grid2">
+          <button class="${f.id===S.me?'yolk':'alt'} small" onclick="sheetTake('${f.id}',${left||1})">Entnehmen</button>
           <button class="alt small" onclick="sheetWaive('${f.id}')" aria-label="Verzichten oder weniger nehmen">${wv?'Menge ändern':'Verzichten'}</button>
         </div></div>`; }).join('')}</div>
   </div>`;
@@ -657,7 +679,7 @@ function weekCard(){
 function sheetWaive(fid){
   const q = quota(), w = weekStats(monday(new Date())), cur = q - (w.waived[fid]||0);
   openSheet(`${fam(fid).name}: Eier diese Woche`, `<p class="muted" style="margin:0">Wie viele Eier nimmt die Familie diese Woche? Der Rest vom Anspruch (${q}) wird zum Überschuss und kann an andere gehen.</p>
-    <label>Eier diese Woche (0 bis ${q})</label><input id="wn" type="number" inputmode="numeric" min="0" max="${q}" value="${cur}">
+    <label>Eier diese Woche (0 bis ${q})</label>${stepper('wn', cur, 0, q)}
     <p class="muted" style="margin:10px 0 0">Gilt nur für die laufende Woche. Nächste Woche gelten wieder ${q} Eier.</p>` + actions(`doWaive('${fid}')`));
 }
 async function doWaive(fid){
@@ -701,7 +723,7 @@ function sheetZusatz(fid, n){
   payPick = 'paypal';
   openSheet('Zusatz-Eier nehmen', `<p class="muted" style="margin:0">Zum internen Preis für Familien. Das Geld geht in die Gemeinschaftskasse.</p>
     <label>Wer nimmt Eier?</label><select id="f">${famOptions(fid)}</select>
-    <label>Anzahl</label><input id="n" type="number" inputmode="numeric" min="1" value="${n||1}">
+    <label>Anzahl</label>${stepper('n', n||1, 1)}
     <label>Preis pro Ei, intern (€)</label><input id="p" type="text" inputmode="decimal" value="${String(internPrice()).replace('.',',')}">
     <label>Wie wird bezahlt?</label>${pmSeg('paypal')}` + actions('doZusatz()'));
   setPm('paypal');
@@ -746,7 +768,7 @@ async function delLog(id){
 }
 function sheetTake(fid, n){
   openSheet('Eier entnehmen', `<label>Wer nimmt Eier?</label><select id="f">${famOptions(fid)}</select>
-    <label>Anzahl</label><input id="n" type="number" inputmode="numeric" min="1" value="${n||6}">` + actions('doTake()'));
+    <label>Anzahl</label>${stepper('n', n||6, 1)}` + actions('doTake()'));
 }
 async function doTake(){
   const n=Math.floor(num(val('n'))); if(n<1) return;
@@ -760,7 +782,7 @@ function sheetSale(oid){
   const qty = o ? o.qty : 10;
   openSheet(o ? 'Bestellung ausgeben' : 'Eier verkaufen', `<p class="muted" style="margin:0">Das Geld geht in die Gemeinschaftskasse.${o?' Die Bestellung gilt danach als erledigt.':''}</p>
     <label>Käufer (z. B. Nachbar Meier)</label><input id="b" type="text" placeholder="Name" value="${o?esc(o.buyer):''}">
-    <label>Anzahl</label><input id="n" type="number" inputmode="numeric" min="1" value="${qty}" oninput="saleCalc()">
+    <label>Anzahl</label>${stepper('n', qty, 1, undefined, ' oninput="saleCalc()"')}
     <label>Preis pro Ei, extern (€)</label><input id="p" type="text" inputmode="decimal" value="${String(P().price).replace('.',',')}" oninput="saleCalc()">
     <label>Verkauft von</label><select id="sv">${famOptions(S.me)}</select>
     <label>Wie wird bezahlt?</label>${pmSeg('bar')}
@@ -791,7 +813,7 @@ async function doSale(){
 }
 function sheetLaid(d0){
   openSheet('Eier nachtragen', `<label>Datum</label><input id="d" type="date" value="${d0||today()}" min="${P().start||''}" max="${today()}">
-    <label>Anzahl Eier an diesem Tag</label><input id="n" type="number" inputmode="numeric" min="1" value="5">` + actions('doLaid()'));
+    <label>Anzahl Eier an diesem Tag</label>${stepper('n', 5, 1)}` + actions('doLaid()'));
 }
 function doLaid(){ const n=Math.floor(num(val('n'))), d=val('d'); if(n<1||!d) return; closeSheet(); addLaid(n,d,true); }
 
@@ -1045,7 +1067,7 @@ const eventsOn = s => P().events.filter(e => e.date <= s && (e.end || e.date) >=
 const EKINDS = ['Tierarzt','Klauenpflege','Urlaub','Sonstiges'];
 
 function vDienst(){
-  return (isHens() ? doorCard() : suppliesCard()) + calCard() + eventsCard() + planCard();
+  return (isHens() ? '' : dutyNote()) + (isHens() ? doorCard() : suppliesCard()) + calCard() + eventsCard() + planCard();
 }
 function calShift(k){ calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth()+k, 1); render(); }
 function calCard(){
@@ -1082,7 +1104,7 @@ function calCard(){
       <button class="alt small" onclick="calShift(1)" aria-label="Nächster Monat">›</button>
     </div>
     <div class="cal"><div class="calh">KW</div>${['Mo','Di','Mi','Do','Fr','Sa','So'].map(x=>`<div class="calh">${x}</div>`).join('')}${grid}</div>
-    <p class="muted" style="margin:10px 2px 0">Tipp auf einen Tag: Einträge ansehen, ändern oder nachtragen.${isHens()?' Gelbe Zahl: gelegte Eier.':''} Blauer Punkt: Termin. Links: Kalenderwoche und Dienst (gelb = deine Familie), ein Tipp darauf tauscht den Dienst.</p>
+    ${info(`Tipp auf einen Tag: Einträge ansehen, ändern oder nachtragen.${isHens()?' Gelbe Zahl: gelegte Eier.':''} Blauer Punkt: Termin. Links: Kalenderwoche und Dienst (gelb = deine Familie), ein Tipp darauf tauscht den Dienst.`, 'So funktioniert der Kalender')}
   </div>`;
 }
 function eventsCard(){
@@ -1135,7 +1157,7 @@ function sheetEditLog(id){
   const priced = l.type === 'sale' || l.type === 'zusatz';
   openSheet('Eintrag ändern', `<p class="muted" style="margin:0">${logText(l)}</p>
     <label>Datum</label><input id="d" type="date" value="${l.date}" max="${today()}">
-    <label>Anzahl</label><input id="n" type="number" inputmode="numeric" min="1" value="${l.n}">
+    <label>Anzahl</label>${stepper('n', l.n, 1)}
     ${(l.type==='take'||l.type==='zusatz'||l.type==='verzicht') ? `<label>${l.type==='take'?'Wer nimmt':l.type==='verzicht'?'Wer verzichtet':'Wer kauft'}</label><select id="f">${famOptions(l.fam)}</select>` : ''}
     ${l.type==='sale' ? `<label>Käufer</label><input id="b" value="${esc(l.buyer||'')}">` : ''}
     ${priced ? `<label>Preis pro Ei (€)</label><input id="p" type="text" inputmode="decimal" value="${String(l.price).replace('.',',')}">` : ''}` + actions(`doEditLog('${id}')`));
@@ -1298,7 +1320,8 @@ function vKasse(){
     </div>
     <div style="margin-top:12px"><div class="muted">Bestand Gemeinschaftskasse</div><div class="big ${kasseStand()<-0.005?'neg':''}" style="font-size:26px">${eur(kasseStand())}</div>
       ${pendingIncome() > 0.005 ? `<div class="muted" style="font-size:14px;margin-top:4px">+ ${eur(pendingIncome())} warten auf die Bestätigung des Geldeingangs</div>` : ''}</div>
-    <p class="muted" style="margin:10px 0 0">${hint}<br>Einnahmen (Verkauf, Zusatz-Eier) zählen zum Bestand, sobald der Geldeingang bestätigt ist, und bleiben dann für Gemeinschaftsausgaben in der Kasse.</p>
+    <p class="muted" style="margin:10px 0 0">${hint}</p>
+    ${info('Einnahmen (Verkauf, Zusatz-Eier) zählen zum Bestand, sobald der Geldeingang bestätigt ist, und bleiben dann für Gemeinschaftsausgaben in der Kasse.', 'Wie rechnet die Kasse?')}
     <button class="yolk" style="width:100%;margin-top:12px" onclick="sheetTx()">Buchung hinzufügen</button>
     <button class="alt" style="width:100%;margin-top:8px" onclick="sheetPay()">Zahlung per PayPal anfordern</button>
     <button class="alt" style="width:100%;margin-top:8px" onclick="sheetPayLink()">PayPal-Link anzeigen</button>
@@ -1353,6 +1376,11 @@ function txRow(t){
 }
 
 /* Karte „Offene Zahlungen“ */
+// Was in der Kasse auf mich wartet: eigenes Bargeld einzahlen und Eingänge prüfen
+function kasseTodo(){
+  const tr = P().tx.filter(tracked);
+  return tr.filter(t => t.state === 'bar_offen' && t.seller === S.me).length + tr.filter(t => t.state === 'pruefen').length;
+}
 function openPayCard(){
   const tr = P().tx.filter(tracked);
   const open = tr.filter(t => t.state && t.state !== 'bestaetigt'), legacy = tr.filter(t => !t.state);
@@ -2034,7 +2062,10 @@ function manualCard(){
     <li><b>Oben rechts</b> steht, wer angemeldet ist. Wer bei Hühnern und Ziegen dabei ist, wechselt oben zwischen den beiden Reitern.</li>
     <li><b>Aktualisieren:</b> Zieh die Seite ganz oben nach unten und lass los. Alle Familien sehen dieselben Daten, was jemand einträgt, siehst du nach dem Aktualisieren.</li>
     <li><b>Aufs Handy legen:</b> Wähle im Browser-Menü „Zum Startbildschirm hinzufügen“, dann startet die App wie jede andere.</li>
-    <li><b>Unten</b> wechselst du zwischen den Bereichen. Alles, was du tippst, wird sofort für alle gespeichert.</li></ul>`);
+    <li><b>Unten</b> wechselst du zwischen den Bereichen. Alles, was du tippst, wird sofort für alle gespeichert.</li>
+    <li>Eine <b>rote Zahl</b> am Reiter zeigt, dass etwas auf dich wartet: ${hens?'bei Eier offene Bestellungen von Nachbarn, ':''}bei Kasse dein Bargeld zum Einzahlen und Eingänge, die jemand prüfen muss.</li>
+    <li>Hat deine Familie Dienst, steht oben <b>Du hast diese Woche Dienst</b>. Beim ersten Öffnen der Woche kommt dazu einmal ein kurzer Hinweis.</li>
+    <li>Bei Anzahlen kannst du mit <b>−</b> und <b>+</b> tippen statt die Zahl einzugeben. Kurze Erklärungen klappst du mit <b>ⓘ</b> auf.</li></ul>`);
   const fehler = manDet('fehler', 'Fehler korrigieren und Protokoll', `<ul>
     <li><b>Vertippt?</b> Tippe im Kalender (Tab <b>Dienst</b>) auf den Tag. Dort kannst du Einträge ändern oder mit ✕ löschen.${hens?' Das geht auch im eingeklappten <b>Verlauf</b> im Tab <b>Eier</b>.':''} Buchungen löschst du in der Kasse mit ✕.</li>
     <li>Einträge der letzten <b>14 Tage</b> kann jede Familie ändern, ältere nur ein Admin.</li>
@@ -2160,12 +2191,24 @@ function manualCard(){
   </details>`;
 }
 
+// Hinweis, wenn die eigene Familie diese Woche Dienst hat (oben im ersten Tab), und einmal pro Woche ein Fenster
+function dutyNote(){
+  const m = monday(new Date());
+  return dutyFam(m) === S.me ? `<div class="card dutynote"><strong>Du hast diese Woche Dienst</strong> <span class="muted">(KW ${isoWeek(m)}, ${isHens() ? 'Hühner' : 'Ziegen'})</span></div>` : '';
+}
+function weekDutyPopup(){
+  const m = monday(new Date()), key = `hof-dienst-hinweis:${S.cur}:${ds(m)}`;
+  if(!S.p || dutyFam(m) !== S.me || lsGet(key) || document.getElementById('dlg')) return;
+  lsSet(key, '1');
+  ask(`Diese Woche (KW ${isoWeek(m)}) ist deine Familie bei den ${isHens() ? 'Hühnern' : 'Ziegen'} mit dem Dienst dran.`, {title:'Du hast diese Woche Dienst', ok:'Alles klar', cancel:false});
+}
 function vHof(){
   const p = P();
   return `
   <div class="card">
     <h2>Angemeldet</h2>
     <div class="row"><span>${fam(S.me).system ? 'Konto' : 'Familie'} <strong>${esc(fam(S.me).name)}</strong>${S.admin?' <span class="pill">Admin</span>':''}</span><button class="alt small" onclick="logout()">Abmelden</button></div>
+    <p class="muted" style="margin:10px 0 0">Bei „${esc(p.name)}“ dabei: ${members().map(f => esc(f.name)).join(', ')}. Familien und Zuordnung ändert der Admin.</p>
   </div>
   ${isHens() ? `<div class="card">
     <h2>Nachbar-Seite</h2>
@@ -2175,11 +2218,6 @@ function vHof(){
     <button class="yolk" style="width:100%;margin-top:12px" onclick="sheetNeighbors()">Link für Nachbarn teilen (WhatsApp)</button>
   </div>` : ''}
   ${isHens() ? pushCard() : ''}
-  <div class="card">
-    <h2>Wer ist bei „${esc(p.name)}“ dabei?</h2>
-    ${members().map(f=>`<div class="mem">• ${esc(f.name)}</div>`).join('')}
-    <p class="muted" style="margin:8px 0 0">Familien und Zuordnung zu den Projekten ändert der Admin.</p>
-  </div>
   ${S.admin ? `<details class="card" ${setOpen?'open':''} ontoggle="setOpen=this.open">
     <summary><h2 style="margin:0">Einstellungen</h2><span class="pill">nur Admin</span></summary>
   ${isHens() ? `<div>
