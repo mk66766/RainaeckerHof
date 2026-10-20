@@ -53,7 +53,7 @@
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{overscroll-behavior-y:contain}
-#ptr{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 6px);transform:translate(-50%,-60px);opacity:0;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:99px;padding:8px 14px;font-size:13px;z-index:15;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+#ptr{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 6px);transform:translate(-50%,-60px);opacity:0;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:99px;padding:8px 14px;font-size:14px;z-index:15;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.25)}
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45}
 :root{padding-top:env(safe-area-inset-top,0px)}
 body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px));min-height:100vh}
@@ -62,7 +62,7 @@ h1,h2,h3{font-family:var(--head);margin:0;letter-spacing:-.01em}
 h1{font-size:26px;font-weight:800}
 h2{font-size:19px;font-weight:700;margin-bottom:10px}
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
-.me{font-size:12px;color:var(--muted);flex:none;white-space:nowrap}
+.me{font-size:14px;color:var(--muted);flex:none;white-space:nowrap}
 .top h1{font-size:clamp(18px,6.1vw,26px);white-space:nowrap;min-width:0}
 select,input,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
 select:focus-visible,input:focus-visible,button:focus-visible,textarea:focus-visible{outline:3px solid var(--barn);outline-offset:2px}
@@ -86,8 +86,8 @@ button.ghost{background:none;color:var(--muted);padding:4px 8px}
 .egg .l{font-size:14px;font-weight:600;margin-top:4px}
 .hero{display:flex;flex-direction:column;align-items:center;padding:22px 16px 18px;position:relative}
 .duty{position:absolute;top:6px;left:6px;display:flex;flex-direction:column;line-height:1.2;padding:4px 8px;border-radius:10px;background:var(--bg);border:1.5px solid var(--line);white-space:nowrap;z-index:1}
-.duty span{font-size:10px;color:var(--muted)}
-.duty b{font-size:12px}
+.duty span{font-size:12px;color:var(--muted)}
+.duty b{font-size:14px}
 .duty.mine{border:2px solid var(--yolk);padding:3.5px 7.5px}
 @media (max-width:350px){.egg{width:124px;height:153px}.egg .n{font-size:54px}.duty span{display:none}}
 .herofoot{width:100%;display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-top:14px}
@@ -98,12 +98,12 @@ button.ghost{background:none;color:var(--muted);padding:4px 8px}
 .bars{display:flex;align-items:flex-end;gap:8px;height:110px;margin-top:8px}
 .bar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:4px}
 .bar i{display:block;width:100%;background:var(--yolk);border-radius:6px 6px 2px 2px;min-height:3px}
-.bar span{font-size:12px;color:var(--muted)}
-.bar b{font-size:12px}
+.bar span{font-size:14px;color:var(--muted)}
+.bar b{font-size:14px}
 .list .item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
 .list .item:first-child{border-top:0}
 .pos{color:var(--good);font-weight:600}.neg{color:var(--bad);font-weight:600}
-.pill{display:inline-block;padding:2px 10px;border-radius:99px;background:var(--yolk);color:var(--yolk-ink);font-size:13px;font-weight:600}
+.pill{display:inline-block;padding:2px 10px;border-radius:99px;background:var(--yolk);color:var(--yolk-ink);font-size:14px;font-weight:600}
 .now{border:2px solid var(--yolk)}
 .check{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);font-weight:500}
 .check:first-of-type{border-top:0}
@@ -112,14 +112,14 @@ button.ghost{background:none;color:var(--muted);padding:4px 8px}
 .meter i{display:block;height:100%;background:var(--yolk);border-radius:99px}
 .meter i.full{background:var(--good)}
 .paychip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
-.pc{font-size:12.5px;font-weight:600;padding:2px 10px;border-radius:99px;border:1px solid var(--line)}
+.pc{font-size:14px;font-weight:600;padding:2px 10px;border-radius:99px;border:1px solid var(--line)}
 .pc.warn{background:var(--yolk);color:var(--yolk-ink);border-color:var(--yolk)}
 .pc.info{background:var(--bg);color:var(--ink)}
 .pc.good{color:var(--good);border-color:var(--good)}
 .pc.bad{background:#C0392B;color:#fff;border-color:#C0392B}
 .dlgbg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:30;display:flex;align-items:center;justify-content:center;padding:20px}
 .dlg{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:22px;padding:22px 20px 18px;width:100%;max-width:380px;box-shadow:0 14px 44px rgba(0,0,0,.4)}
-.dlg .tag{display:inline-block;margin-bottom:10px;padding:3px 11px;border-radius:99px;background:var(--bg);border:1px solid var(--line);font-size:12px;font-weight:600;color:var(--muted)}
+.dlg .tag{display:inline-block;margin-bottom:10px;padding:3px 11px;border-radius:99px;background:var(--bg);border:1px solid var(--line);font-size:14px;font-weight:600;color:var(--muted)}
 .dlg h3{font-size:20px;margin:0 0 8px;line-height:1.2}
 .dlg p{margin:0;color:var(--muted);font-size:16px;line-height:1.45}
 .dlg .btns{display:flex;gap:10px;margin-top:20px}
@@ -130,7 +130,7 @@ button.danger{background:#C0392B;color:#fff}
 .ph-big{width:100%;max-height:70vh;object-fit:contain;border-radius:12px}
 .cal{display:grid;grid-template-columns:52px repeat(7,minmax(0,1fr));gap:3px;width:100%}
 .wk{height:50px;border-radius:10px;background:var(--bg);color:var(--ink);border:1.5px solid var(--line);padding:2px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:10.5px;line-height:1.15;min-width:0;overflow:hidden}
-.wk b{font-size:11px}
+.wk b{font-size:12px}
 .wk span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wk.mine{background:var(--yolk);color:var(--yolk-ink);border-color:var(--yolk)}
 .wk.cur{border-width:2px;border-color:var(--ink)}
@@ -146,16 +146,16 @@ details.card>summary{list-style:none;display:flex;justify-content:space-between;
 details.card>summary::-webkit-details-marker{display:none}
 details.card>summary::after{content:'›';font-size:24px;line-height:1;color:var(--muted);transform:rotate(90deg);transition:transform .15s}
 details.card[open]>summary::after{transform:rotate(-90deg)}
-.calh{font-size:12px;color:var(--muted);text-align:center;padding:2px 0}
+.calh{font-size:14px;color:var(--muted);text-align:center;padding:2px 0}
 .day{position:relative;height:50px;min-width:0;overflow:hidden;border-radius:10px;background:var(--bg);color:var(--ink);border:1.5px solid var(--line);padding:3px 2px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;font-weight:500;font-size:14px}
 .day.today{border-color:var(--yolk);border-width:2px}
-.day .eg{font-size:11px;background:var(--yolk);color:var(--yolk-ink);border-radius:99px;padding:0 6px;margin-top:2px;font-weight:700}
+.day .eg{font-size:12px;background:var(--yolk);color:var(--yolk-ink);border-radius:99px;padding:0 6px;margin-top:2px;font-weight:700}
 .day .dot{position:absolute;top:4px;right:4px;width:6px;height:6px;border-radius:50%;background:var(--barn)}
 nav{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);display:flex;padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px));z-index:5}
-nav button{flex:1;background:none;color:var(--muted);border-radius:10px;padding:8px 2px;font-size:12.5px;display:flex;flex-direction:column;align-items:center;gap:2px}
+nav button{flex:1;background:none;color:var(--muted);border-radius:10px;padding:8px 2px;font-size:14px;display:flex;flex-direction:column;align-items:center;gap:2px}
 nav button{position:relative}
 nav button svg{width:24px;height:24px}
-.nbadge{position:absolute;top:2px;left:calc(50% + 8px);min-width:17px;height:17px;padding:0 5px;border-radius:99px;background:#D9534F;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1}
+.nbadge{position:absolute;top:2px;left:calc(50% + 8px);min-width:17px;height:17px;padding:0 5px;border-radius:99px;background:#D9534F;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1}
 nav button[aria-current="page"]{color:var(--ink);background:color-mix(in srgb,var(--yolk) 28%,transparent)}
 .sheetbg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10;display:flex;align-items:flex-end;justify-content:center}
 .sheet{background:var(--surface);width:100%;max-width:560px;border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));max-height:90vh;overflow:auto}
@@ -471,7 +471,7 @@ function vEier(){
   return `
   <div class="card hero">
     <div class="duty ${dutyF===S.me?'mine':''}"><span>Dienst KW ${isoWeek(monday(new Date()))}</span><b>${esc(fam(dutyF).name)}</b></div>
-    <button class="egg" onclick="addLaid(1,today())" aria-label="Ein Ei mehr eintragen"><span class="n">${n}</span><span class="l">heute gelegt · +1</span></button>
+    <button class="egg" onclick="if(navigator.vibrate)navigator.vibrate(30);addLaid(1,today())" aria-label="Ein Ei mehr eintragen"><span class="n">${n}</span><span class="l">heute gelegt · +1</span></button>
     <div class="herofoot">
       <button class="alt small" onclick="addLaid(-1,today())" ${n===0?'disabled':''}>−1 korrigieren</button>
       <div class="weekcount"><span class="muted">Diese Woche</span><b>${wkLaid}</b><span class="muted">Eier gelegt</span></div>
@@ -881,7 +881,7 @@ function suppliesCard(){
 function sheetSupply(id){
   const s = id ? P().supplies.find(x=>x.id===id) : null;
   openSheet(s ? `${s.name} auffüllen` : 'Vorrat hinzufügen', `
-    <label>Was?</label><input id="nm" list="sup" value="${s?esc(s.name):''}" placeholder="z. B. Heu">
+    <label>Was?</label><input id="nm" list="sup" value="${s?esc(s.name):''}">
     <datalist id="sup"><option>Heu</option><option>Stroh</option><option>Mineralfutter</option><option>Kraftfutter</option><option>Einstreu</option></datalist>
     <label>Reicht jetzt noch ca. wie viele Tage?</label><input id="dy" type="number" inputmode="numeric" min="0" value="${s?Math.max(0,remaining(s)):30}">
     <div class="actions"><button class="alt" onclick="closeSheet()">Abbrechen</button>
@@ -1014,7 +1014,7 @@ function sheetHealth(){
     <label>Welches Tier?</label><select id="an"><option>Alle</option>${names.map(n=>`<option>${esc(n)}</option>`).join('')}</select>
     <label>Datum</label><input id="dt" type="date" value="${today()}" max="${today()}">
     <label>Nächster Termin (optional)</label><input id="nx" type="date">
-    <label>Notiz (optional)</label><input id="nt" placeholder="z. B. Mittel, Tierarzt-Name">
+    <label>Notiz (optional)</label><input id="nt">
     <label>Erledigt von</label><select id="f">${famOptions()}</select>` + actions('doHealth()'));
 }
 function doHealth(){
@@ -1106,16 +1106,16 @@ function sheetDay(s){
   const linked = id => p.log.some(l => l.txId === id);
   const dutyF = dutyFam(monday(parseD(s)));
   const title = parseD(s).toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  const lock = '<span class="muted" style="font-size:13px">nur Admin</span>';
+  const lock = '<span class="muted" style="font-size:14px">nur Admin</span>';
   openSheet(title, `
     <p class="muted" style="margin:0">Wochendienst: <strong>${esc(fam(dutyF).name)}</strong></p>
     <div class="list" style="margin-top:8px">
     ${evs.map(e=>`<div class="item"><div><strong>${esc(e.title)}</strong> <span class="pill">${esc(e.kind)}</span>${e.fam?`<div class="muted">${esc(fam(e.fam).name)}</div>`:''}</div>
       ${canEditEvent(e)?`<button class="alt small" onclick="sheetEvent('${e.id}')">Ändern</button>`:''}</div>`).join('')}
-    ${isHens() ? logs.map(l=>`<div class="item"><div>${logText(l)}${logMeta(l,false)?`<div class="muted" style="font-size:13px">${logMeta(l,false)}</div>`:''}</div>
+    ${isHens() ? logs.map(l=>`<div class="item"><div>${logText(l)}${logMeta(l,false)?`<div class="muted" style="font-size:14px">${logMeta(l,false)}</div>`:''}</div>
       ${can?`<div style="display:flex;gap:4px"><button class="alt small" onclick="sheetEditLog('${l.id}')">Ändern</button><button class="ghost" onclick="delLogDay('${l.id}','${s}')" aria-label="Löschen">✕</button></div>`:lock}</div>`).join('') : ''}
     ${txs.map(t=>`<div class="item"><div>${esc(t.desc||t.kind)}<div class="muted">${txMeta(t)} · ${txAmt(t)}</div></div>
-      ${!can ? lock : linked(t.id) ? '<span class="muted" style="font-size:13px">über Eier-Eintrag ändern</span>'
+      ${!can ? lock : linked(t.id) ? '<span class="muted" style="font-size:14px">über Eier-Eintrag ändern</span>'
         : (t.kind==='einzahlung'||t.kind==='auszahlung') ? `<button class="ghost" onclick="delTxDay('${t.id}','${s}')" aria-label="Löschen">✕</button>`
         : `<div style="display:flex;gap:4px"><button class="alt small" onclick="sheetEditTx('${t.id}')">Ändern</button><button class="ghost" onclick="delTxDay('${t.id}','${s}')" aria-label="Löschen">✕</button></div>`}</div>`).join('')}
     </div>
@@ -1194,7 +1194,7 @@ async function delTxDay(id, date){
 function sheetEvent(id, d0){
   const e = id ? P().events.find(x => x.id === id) : null;
   openSheet(e ? 'Termin ändern' : 'Neuer Termin', `
-    <label>Was?</label><input id="ti" value="${e?esc(e.title):''}" placeholder="z. B. Tierarzt, Klauenpflege, Urlaub Familie X">
+    <label>Was?</label><input id="ti" value="${e?esc(e.title):''}">
     <label>Art</label><select id="ki">${EKINDS.map(k=>`<option ${e&&e.kind===k?'selected':''}>${k}</option>`).join('')}</select>
     <div class="grid2"><div><label>Von</label><input id="da" type="date" value="${e?e.date:(d0||today())}"></div>
     <div><label>Bis (optional)</label><input id="en" type="date" value="${e?e.end:''}"></div></div>
@@ -1300,8 +1300,7 @@ function vKasse(){
       ${pendingIncome() > 0.005 ? `<div class="muted" style="font-size:14px;margin-top:4px">+ ${eur(pendingIncome())} warten auf die Bestätigung des Geldeingangs</div>` : ''}</div>
     <p class="muted" style="margin:10px 0 0">${hint}<br>Einnahmen (Verkauf, Zusatz-Eier) zählen zum Bestand, sobald der Geldeingang bestätigt ist, und bleiben dann für Gemeinschaftsausgaben in der Kasse.</p>
     <button class="yolk" style="width:100%;margin-top:12px" onclick="sheetTx()">Buchung hinzufügen</button>
-    <button class="alt" style="width:100%;margin-top:8px" onclick="sheetPay()">Zahlung per PayPal anfordern (QR / WhatsApp)</button>
-    <button class="alt" style="width:100%;margin-top:8px" onclick="sheetPayLink()">PayPal-Link anzeigen${p.paypal ? ' (paypal.me/' + esc(p.paypal) + ')' : ''}</button>
+    <button class="alt" style="width:100%;margin-top:8px" onclick="sheetPay()">PayPal: Link oder Zahlung</button>
     ${S.admin ? `<button class="alt" style="width:100%;margin-top:8px" onclick="sheetReport()">Monatsbericht teilen</button>` : ''}
   </div>
   ${openPayCard()}
@@ -1348,7 +1347,7 @@ function payLine(t){
 function txRow(t){
   const kids = tipsOf(t);
   return `<div class="item" style="align-items:flex-start"><div style="flex:1">${esc(t.desc || t.kind)}<div class="muted">${fmtDay(parseD(t.date))} · ${txMeta(t)}</div>
-    ${kids.map(k => `<div class="muted" style="font-size:13px">+ Trinkgeld ${eur(k.amt)}</div>`).join('')}${payLine(t)}</div>
+    ${kids.map(k => `<div class="muted" style="font-size:14px">+ Trinkgeld ${eur(k.amt)}</div>`).join('')}${payLine(t)}</div>
     <div style="display:flex;align-items:center;gap:4px">${txAmt(t)}<button class="ghost" onclick="delTx('${t.id}')" aria-label="Löschen">✕</button></div></div>`;
 }
 
@@ -1527,7 +1526,7 @@ function saleCalc(){
   rc.value = money(Math.floor(num(val('n'))) * num(val('p')));
 }
 let txKind='ausgabe';
-let kasseOpen = false;
+let kasseOpen = false, setOpen = false;
 const payerOptions = sel => members().map(f => `<option value="${f.id}" ${sel!==null && f.id===(sel||defFam())?'selected':''}>${esc(f.name)}</option>`).join('')
   + `<option value="" ${sel===null?'selected':''}>Gemeinschaftskasse</option>`;
 function sheetTx(d0){
@@ -1618,13 +1617,13 @@ function sheetPay(o){
   if(!P().paypal && !S.admin){ toast('Der Admin muss zuerst den PayPal.me-Namen eintragen'); return; }
   const p = P(), last = o ? o.amount.toFixed(2).replace('.', ',') : (lsGet('hof-pay-amount') || '');
   payMode = (o && o.mode) || 'sale'; payBooked = !!o; payExtra = o ? {txId:o.txId, method:o.method, purpose:o.purpose || ''} : {};
-  openSheet(o ? 'Bezahlung per PayPal' : 'Zahlung per PayPal anfordern', `
+  openSheet(o ? 'Bezahlung per PayPal' : 'PayPal: Link oder Zahlung', `
     ${o ? '<p class="muted" style="margin:0">Der Betrag ist schon in der Gemeinschaftskasse gebucht. Trage einmal den PayPal.me-Namen ein, dann kannst du ihn gleich bezahlen oder verschicken.</p>' : ''}
     ${p.paypal ? `<div class="row"><span class="muted">Konto: paypal.me/${esc(p.paypal)}</span>${S.admin ? `<button class="ghost" onclick="document.getElementById('ppname').style.display=''">ändern</button>` : ''}</div>` : ''}
-    <div id="ppname" style="${p.paypal?'display:none':''}"><label>PayPal.me-Name der Gemeinschaft</label><input id="ppn" type="text" value="${esc(p.paypal)}" placeholder="z. B. paypal.me/rainaecker"></div>
-    ${isHens() ? `<label>Anzahl Eier (optional, rechnet den Betrag aus)</label><input id="ppe" type="number" inputmode="numeric" min="0" placeholder="z. B. 10" oninput="ppCalc()">` : ''}
-    <label>Betrag (€): bei jeder Zahlung frei wählbar</label><input id="ppa" type="text" inputmode="decimal" value="${esc(last)}" placeholder="z. B. 4,00">
-    <label>Name des Käufers (optional)</label><input id="ppb" type="text" placeholder="z. B. Familie Meier" value="${o ? esc(o.buyer || '') : ''}">
+    <div id="ppname" style="${p.paypal?'display:none':''}"><label>PayPal.me-Name der Gemeinschaft</label><input id="ppn" type="text" value="${esc(p.paypal)}"></div>
+    ${isHens() ? `<label>Anzahl Eier (optional, rechnet den Betrag aus)</label><input id="ppe" type="number" inputmode="numeric" min="0" oninput="ppCalc()">` : ''}
+    <label>Betrag (€), leer lassen = Link ohne Betrag</label><input id="ppa" type="text" inputmode="decimal" value="${esc(last)}">
+    <label>Name des Käufers (optional)</label><input id="ppb" type="text" value="${o ? esc(o.buyer || '') : ''}">
     <div class="actions"><button class="alt" onclick="closeSheet()">Abbrechen</button><button class="yolk" onclick="doPay()">Weiter</button></div>`);
 }
 function ppCalc(){
@@ -1647,7 +1646,7 @@ function payExtras(){
   const rounded = Math.abs(pay.amount - pay.base) > 0.004, up = Math.ceil(pay.base - 0.004);
   const roundBtn = rounded ? `<button class="ghost" style="padding:6px 0;width:100%" onclick="payRound(false)">Zurück auf ${eur(pay.base)}</button>`
     : (up > pay.base + 0.004 ? `<button class="alt small" style="width:100%;margin-top:8px" onclick="payRound(true)">Auf ${eur(up)} aufrunden</button>` : '');
-  const hint = rounded ? `<p class="muted" style="margin:6px 0 0;font-size:13px">Die ${eur(pay.amount - pay.base)} mehr sind Trinkgeld. Gebucht werden sie, wenn der Eingang bestätigt wird.</p>` : '';
+  const hint = rounded ? `<p class="muted" style="margin:6px 0 0;font-size:14px">Die ${eur(pay.amount - pay.base)} mehr sind Trinkgeld. Gebucht werden sie, wenn der Eingang bestätigt wird.</p>` : '';
   const dep = pay.method === 'bar' && pay.txId ? `<button class="alt" style="width:100%;margin-top:8px" onclick="payDeposit('${pay.txId}')">Bargeld ist eingezahlt</button>` : '';
   return roundBtn + hint + dep;
 }
@@ -1659,7 +1658,7 @@ function showPay(){
       <p style="text-align:center;margin:14px 0 0"><span class="big" style="font-size:34px">${eur(pay.amount)}</span><br><span class="muted">an paypal.me/${esc(pay.name)}</span></p>
       <button class="yolk" style="width:100%;margin-top:14px" onclick="payOpen()">PayPal öffnen</button>
       ${payExtras()}
-      <p class="muted" style="margin:8px 0 0;font-size:13px">Der Eingang wird in der Kasse unter „Offene Zahlungen“ geprüft.</p>
+      <p class="muted" style="margin:8px 0 0;font-size:14px">Der Eingang wird in der Kasse unter „Offene Zahlungen“ geprüft.</p>
       <div class="grid2" style="margin-top:10px"><button class="alt" onclick="payCopy()">Link kopieren</button><button class="alt" onclick="closeSheet()">Später</button></div>`);
     return;
   }
@@ -1668,8 +1667,8 @@ function showPay(){
     <div style="display:flex;justify-content:center;margin-top:4px"><div style="width:min(72vw,280px);border-radius:14px;overflow:hidden;border:1px solid var(--line)">${qrSvg(pay.link)}</div></div>
     <p style="text-align:center;margin:8px 0 0"><strong>${pay.amount>0 ? eur(pay.amount) : 'Betrag frei wählbar'}</strong><br><span class="muted">paypal.me/${esc(pay.name)}</span></p>
     ${pay.booked && !nbPays ? `<button class="yolk" style="width:100%;margin-top:12px" onclick="payOpen()">PayPal öffnen</button>
-      <p class="muted" style="margin:6px 0 0;font-size:13px">Bargeld bekommen? Mit „PayPal öffnen“ zahlst du es in die Gemeinschaftskasse ein. Soll der Nachbar selbst per PayPal zahlen, schick ihm die Nachricht oder zeig den QR-Code.</p>` : ''}
-    ${nbPays ? `<p class="muted" style="margin:10px 0 0;font-size:13px">Der Nachbar zahlt selbst per PayPal: Schick ihm die Nachricht oder zeig den QR-Code. Den Eingang bestätigt ihr später in der Kasse.</p>` : ''}
+      <p class="muted" style="margin:6px 0 0;font-size:14px">Bargeld bekommen? Mit „PayPal öffnen“ zahlst du es in die Gemeinschaftskasse ein. Soll der Nachbar selbst per PayPal zahlen, schick ihm die Nachricht oder zeig den QR-Code.</p>` : ''}
+    ${nbPays ? `<p class="muted" style="margin:10px 0 0;font-size:14px">Der Nachbar zahlt selbst per PayPal: Schick ihm die Nachricht oder zeig den QR-Code. Den Eingang bestätigt ihr später in der Kasse.</p>` : ''}
     ${payExtras()}
     <label>Nachricht an den Nachbarn (du kannst sie ändern)</label>
     <textarea id="ppm" rows="8">${esc(payMessage(pay))}</textarea>
@@ -1837,8 +1836,8 @@ function pushCard(){
   const st = push.state;
   const body = st === 'an' ? `<p style="margin:0 0 10px"><strong class="pos">✓ Eingeschaltet</strong> <span class="muted">auf diesem Gerät</span></p>
       <div class="grid2"><button class="alt" onclick="testPush()">Test senden</button><button class="alt" onclick="disablePush()">Ausschalten</button></div>
-      <div class="item" style="margin-top:12px"><div>Erinnerungen vom Hof<div class="muted" style="font-size:13px">Dienst, offene Zahlungen, Monatsabschluss, jeweils um 18 Uhr</div></div><button class="alt small" onclick="toggleReminders()">${push.reminders ? 'Ausschalten' : 'Einschalten'}</button></div>
-      <p style="margin:6px 0 0;font-size:13px" class="muted">Erinnerungen sind auf diesem Gerät <strong>${push.reminders ? 'ein' : 'aus'}</strong>.</p>`
+      <div class="item" style="margin-top:12px"><div>Erinnerungen vom Hof<div class="muted" style="font-size:14px">Dienst, offene Zahlungen, Monatsabschluss, jeweils um 18 Uhr</div></div><button class="alt small" onclick="toggleReminders()">${push.reminders ? 'Ausschalten' : 'Einschalten'}</button></div>
+      <p style="margin:6px 0 0;font-size:14px" class="muted">Erinnerungen sind auf diesem Gerät <strong>${push.reminders ? 'ein' : 'aus'}</strong>.</p>`
     : st === 'aus' ? `<button class="yolk" style="width:100%" onclick="enablePush()">Benachrichtigungen einschalten</button>`
     : st === 'blockiert' ? `<p class="muted" style="margin:0">Benachrichtigungen sind für diese App blockiert. Erlaube sie in den Einstellungen deines Handys (Benachrichtigungen bzw. Website-Einstellungen) und öffne die App neu.</p>`
     : st === 'ios-installieren' ? `<p class="muted" style="margin:0">Auf dem iPhone geht das nur, wenn die App auf dem Home-Bildschirm liegt (iOS 16.4 oder neuer): Teilen-Symbol, dann „Zum Home-Bildschirm“. Öffne die App danach von dort.</p>`
@@ -1878,7 +1877,7 @@ function famCard(){
     <div class="row"><h2 style="margin:0">Familien</h2><button class="alt small" onclick="sheetFamAdd()">Hinzufügen</button></div>
     <p class="muted" style="margin:6px 0 8px;font-size:14px">Nur für Verwalter: Familien aufnehmen, Projekte zuteilen, Zugangscode ändern, Verwalter-Recht vergeben oder Familien entfernen.</p>
     ${act.map(f => `<div class="item"><div>${esc(f.name)}${tag(f)}<div style="margin-top:4px">${chips(f) || '<span class="muted">in keinem Projekt</span>'}</div></div><button class="alt small" onclick="sheetFamEdit('${f.id}')">Bearbeiten</button></div>`).join('')}
-    ${sys.map(f => `<div class="item"><div>${esc(f.name)}${tag(f)}<div style="margin-top:4px"><span class="pc good">Admin-Konto</span> <span class="muted" style="font-size:13px">sieht alles, zählt nicht als Familie</span></div></div><button class="alt small" onclick="sheetFamEdit('${f.id}')">Bearbeiten</button></div>`).join('')}
+    ${sys.map(f => `<div class="item"><div>${esc(f.name)}${tag(f)}<div style="margin-top:4px"><span class="pc good">Admin-Konto</span> <span class="muted" style="font-size:14px">sieht alles, zählt nicht als Familie</span></div></div><button class="alt small" onclick="sheetFamEdit('${f.id}')">Bearbeiten</button></div>`).join('')}
     ${gone.length ? `<p class="muted" style="margin:10px 0 0;font-size:14px">Ausgetreten: ${gone.map(f => `${esc(f.name)} (${fmtDay(parseD(f.left))})`).join(', ')}</p>` : ''}
   </div>`;
 }
@@ -1892,7 +1891,7 @@ function famAddToggle(){
 function sheetFamAdd(){
   openSheet('Hinzufügen', `<p class="muted" style="margin:0">Eine Familie bekommt einen eigenen Zugang. Der Anmeldename ergibt sich aus dem Namen, den Code (6 Ziffern) gibst du weiter.</p>
     <label style="display:flex;align-items:center;gap:10px;margin-top:14px;font-size:16px"><input type="checkbox" id="fa_s" onchange="famAddToggle()" style="width:auto;margin:0"> Admin-Konto statt Familie</label>
-    <p class="muted" style="margin:4px 0 0;font-size:13px">Ein Admin-Konto sieht und bearbeitet alles und kann Familien verwalten. Es zählt aber nirgends als Familie mit: kein Dienst, kein Wochenanspruch, kein Kostenanteil.</p>
+    <p class="muted" style="margin:4px 0 0;font-size:14px">Ein Admin-Konto sieht und bearbeitet alles und kann Familien verwalten. Es zählt aber nirgends als Familie mit: kein Dienst, kein Wochenanspruch, kein Kostenanteil.</p>
     <label>Name</label><input id="fa_n" type="text" maxlength="30" autocomplete="off">
     <label>Code (6 Ziffern)</label><input id="fa_c" type="text" inputmode="numeric" maxlength="6" autocomplete="off">
     <div id="fa_fam"><label>Dabei bei</label>${projBoxes('fp', () => true)}
@@ -1911,7 +1910,7 @@ function sheetFamEdit(id){
   const projects = f.system ? `<p class="muted" style="margin:0">Dieses Admin-Konto sieht alle Projekte und zählt nirgends als Familie mit.</p>`
     : `<label>Dabei bei</label>${projBoxes('fe', p => p.members.includes(id))}
     <button class="yolk" style="width:100%;margin-top:12px" onclick="doFamProjects('${id}')">Projekte speichern</button>
-    <div class="item" style="margin-top:16px"><div>Verwalter<div class="muted" style="font-size:13px">Darf Familien verwalten und ältere Einträge ändern</div></div><button class="alt small" onclick="doFamAdmin('${id}', ${!f.admin})">${f.admin ? 'Recht entziehen' : 'Zum Verwalter machen'}</button></div>`;
+    <div class="item" style="margin-top:16px"><div>Verwalter<div class="muted" style="font-size:14px">Darf Familien verwalten und ältere Einträge ändern</div></div><button class="alt small" onclick="doFamAdmin('${id}', ${!f.admin})">${f.admin ? 'Recht entziehen' : 'Zum Verwalter machen'}</button></div>`;
   openSheet(`${esc(f.name)} bearbeiten`, `${projects}
     <label style="margin-top:18px">Neuer Zugangscode (6 Ziffern)</label><input id="fe_c" type="text" inputmode="numeric" maxlength="6" autocomplete="off">
     <button class="alt" style="width:100%;margin-top:8px" onclick="doFamCode('${id}')">Code ändern</button>
@@ -1948,6 +1947,7 @@ async function doFamRemove(id){
 
 /* ================= Hof (Einstellungen) ================= */
 function sheetHens(){
+  if(!S.admin) return;
   const p = P();
   openSheet('Hennenbestand ändern', `<p class="muted" style="margin:0">Trage ein, ab welchem Tag sich die Zahl der Hennen geändert hat. Frühere Tage rechnen mit dem alten Bestand weiter.</p>
     <label>Ab Datum</label><input id="hd" type="date" value="${today()}" max="${today()}">
@@ -2045,7 +2045,7 @@ function manualCard(){
     <li><b>Kassenabgleich</b> (nur Admin): Einmal im Monat vergleicht der Admin den echten PayPal-Kontostand mit dem Bestand der Gemeinschaftskasse (Karte „Kassenabgleich“, Knopf „Abgleich machen“). Die App zeigt die Differenz und merkt sich den Abgleich.</li>
     <li><b>Wer bekommt was?</b> ist eingeklappt, weil ihr es nur bei Auszahlungen braucht. Ein Tipp öffnet es, ein Zähler daneben zeigt, wie viele Zahlungen offen sind. Dort steht der Stand je Familie, darunter die Zahlungsliste. Alle Zahlungen laufen über die Gemeinschaftskasse: Wer zahlen muss, zahlt in die Kasse ein, wer etwas bekommt, bekommt es aus der Kasse. Tippe nach der Zahlung auf <b>Eingezahlt</b> oder <b>Ausgezahlt</b>, dann verschwindet der Betrag.</li>
     <li><i>Beispiel:</i> Eine Familie kauft Futter für ${30*nFam} €. Bei ${nFam} Familien zahlen die ${nFam-1} anderen je 30 € in die Kasse, und die Kasse zahlt der Familie ${30*(nFam-1)} € zurück.</li>
-    <li><b>Zahlung per PayPal anfordern:</b> Gib den Betrag ein${hens?' (oder die Anzahl Eier)':''}, optional den Namen. Die App zeigt einen <b>QR-Code</b> und eine fertige Nachricht, die du ändern kannst. Sende sie mit <b>Per WhatsApp senden</b>, teile den <b>QR als Bild</b> oder kopiere den <b>Link</b>. Den Betrag wählst du bei jeder Zahlung neu. Den PayPal.me-Namen trägst du einmal ein, du findest ihn danach im Tab <b>Hof</b> unter „Zahlung“.</li></ul>`);
+    <li><b>PayPal: Link oder Zahlung:</b> Gib den Betrag ein${hens?' (oder die Anzahl Eier)':''}, optional den Namen. Lässt du den Betrag leer, bekommst du den Link der Kasse ohne Betrag. Die App zeigt einen <b>QR-Code</b> und eine fertige Nachricht, die du ändern kannst. Sende sie mit <b>Per WhatsApp senden</b>, teile den <b>QR als Bild</b> oder kopiere den <b>Link</b>. Den Betrag wählst du bei jeder Zahlung neu. Den PayPal.me-Namen trägt der Admin im Tab <b>Hof</b> unter <b>Einstellungen</b> ein.</li></ul>`);
   const kalender = manDet('kalender', 'Kalender, Dienst und Termine', `<ul>
     <li>Im Tab <b>Dienst</b> zeigt der <b>Kalender</b> den Monat. Mit ‹ und › blätterst du.</li>
     <li><b>Links jeder Wochenzeile</b> stehen die Kalenderwoche und die Familie mit Dienst. Gelb ist deine Familie. Ein Tipp darauf <b>tauscht den Dienst</b> dieser Woche.</li>
@@ -2055,7 +2055,7 @@ function manualCard(){
   const protokoll = manDet('hof', 'Einstellungen im Tab Hof', `<ul>
     ${hens?`<li><b>Stall:</b> Hennenbestand (mit Datum, wenn sich die Zahl ändert), Eier pro Familie und Woche (jetzt ${q}), interner Preis (leer = Selbstkostenpreis) und externer Preis für Nachbarn.</li>
     <li><b>Nachbar-Seite:</b> Hier erzeugst du mit <b>Link für Nachbarn teilen</b> eine WhatsApp-Nachricht mit dem Link zu einer öffentlichen Seite. Dort sehen Nachbarn ohne Anmeldung, wie viele Eier gerade übrig sind, den Preis und bei welcher Familie (mit Dienst) sie diese Woche Eier holen können. Nachbarn können dort auch Eier bestellen. Die Seite zeigt immer den aktuellen Stand, der Link muss nur einmal verschickt werden. Darüber trägst du einen Hinweis ein, z. B. Abholort oder Zeiten. Er erscheint auf der Seite.</li>`:''}
-    <li>Nur für den Admin sichtbar: <b>Zahlung</b>, <b>Erfassung</b>, <b>Familien</b> und <b>Daten</b>. In der Kasse sind auch <b>Kassenabgleich</b> und <b>Monatsbericht teilen</b> nur für den Admin.</li>
+    <li>Nur für den Admin sichtbar: die eingeklappten <b>Einstellungen</b> (${hens?'Stall, ':''}Zahlung, Erfassung), <b>Familien</b> und <b>Daten</b>. In der Kasse sind auch <b>Kassenabgleich</b> und <b>Monatsbericht teilen</b> nur für den Admin.</li>
     <li><b>Zahlung:</b> PayPal.me-Name für den QR-Code.</li>
     <li><b>Erfassung:</b> Ab diesem Datum zählt die App.${hens?' Der <b>Live-Start</b> bestimmt, ab wann Vorrat, Überschuss und Eierpreis rechnen. Eier davor zählen nur für die Statistik.':''}</li>
     <li><b>Sichern</b> speichert eine Kopie der Daten als Datei.</li></ul>`);
@@ -2085,7 +2085,7 @@ function manualCard(){
         <li>Jeder Verkauf und jede Zusatz-Eier-Buchung zeigt in der <b>Kasse</b>, welche Familie verkauft bzw. genommen hat, und den Zahlungsstand darunter.</li>
         <li><b>Bargeld offen</b>: Die verkaufende Familie hat das Bargeld und zahlt es per PayPal in die Gemeinschaftskasse ein. Danach tippt sie auf <b>Eingezahlt</b>.</li>
         <li><b>Eingang prüfen:</b> Der Betrag soll auf dem PayPal-Konto sein (vom Nachbarn bezahlt oder von der Familie eingezahlt). Wer ins Konto schaut, tippt auf <b>Eingang bestätigt</b> und trägt ein, was angekommen ist. <b>Mehr</b> als erwartet wird als Trinkgeld gebucht, <b>weniger</b> lässt die Zahlung offen.</li>
-        <li>Den <b>PayPal-Link</b> der Gemeinschaftskasse siehst du in der <b>Kasse</b> mit dem Knopf <b>PayPal-Link anzeigen</b> (der Admin auch im Tab <b>Hof</b> unter „Zahlung“). Dort kannst du ihn kopieren, den QR-Code zeigen oder ihn per WhatsApp schicken.</li>
+        <li>Den <b>PayPal-Link</b> der Gemeinschaftskasse siehst du in der <b>Kasse</b> mit dem Knopf <b>PayPal: Link oder Zahlung</b>, wenn du den Betrag leer lässt (der Admin auch im Tab <b>Hof</b> unter „Einstellungen“). Dort kannst du ihn kopieren, den QR-Code zeigen oder ihn per WhatsApp schicken.</li>
         <li>Die Karte <b>Offene Zahlungen</b> in der Kasse zeigt, wer noch Bargeld einzuzahlen hat und welche Eingänge zu prüfen sind. Ältere Buchungen ohne Zahlungsstand lassen sich mit <b>Erfassen</b> nachtragen.</li>
         <li>Trinkgeld bar: Beim Verkauf bei <b>Erhalten</b> den echten Betrag eintragen, die Differenz wird als eigene Trinkgeld-Buchung in die Gemeinschaftskasse gebucht. Trinkgeld per PayPal: Im Bezahlfenster mit dem Knopf „Auf … aufrunden“ einen höheren Betrag verlangen.</li>
         <li><b>Bestand:</b> Verkäufe und Zusatz-Eier zählen erst zum Bestand der Gemeinschaftskasse, wenn der Geldeingang bestätigt ist. Bis dahin steht der Betrag unter dem Bestand als „warten auf die Bestätigung“. Von Hand gebuchte Einnahmen zählen sofort.</li>
@@ -2122,7 +2122,7 @@ function manualCard(){
         <li><i>Warum kann ich nichts verkaufen?</i> Es gibt gerade keinen Überschuss. Prüfe „Vorrat &amp; Überschuss“ und die Verzichte der Familien.</li>
         <li><i>Im Winter legen die Hennen weniger.</i> Der Anspruch bleibt gleich. Die Karte <b>Diese Woche</b> zeigt dann „es fehlen noch …“. Ihr verteilt die Eier nach Absprache oder nutzt <b>Verzichten</b>.</li>
         <li><i>Ein Nachbar fragt, ob Eier da sind.</i> Öffne den Tab <b>Hof</b>, tippe bei „Nachbar-Seite“ auf <b>Link für Nachbarn teilen</b> und schicke ihm den Link.</li>
-        <li><i>Ein Nachbar will per PayPal zahlen.</i> Tippe in der Kasse auf <b>Zahlung per PayPal anfordern</b> und schicke ihm QR oder Link.</li>
+        <li><i>Ein Nachbar will per PayPal zahlen.</i> Tippe in der Kasse auf <b>PayPal: Link oder Zahlung</b> und schicke ihm QR oder Link.</li>
         <li><i>Es erscheint „Fehler: …“.</i> Prüfe die Internetverbindung, zieh zum Aktualisieren nach unten und versuche es noch einmal. Hilft das nicht, mach einen Screenshot und melde ihn.</li></ul>`)
     ];
   } else {
@@ -2164,16 +2164,25 @@ function vHof(){
   return `
   <div class="card">
     <h2>Angemeldet</h2>
-    <div class="row"><span>Familie <strong>${esc(fam(S.me).name)}</strong>${S.admin?' <span class="pill">Admin</span>':''}</span><button class="alt small" onclick="logout()">Abmelden</button></div>
+    <div class="row"><span>${fam(S.me).system ? 'Konto' : 'Familie'} <strong>${esc(fam(S.me).name)}</strong>${S.admin?' <span class="pill">Admin</span>':''}</span><button class="alt small" onclick="logout()">Abmelden</button></div>
   </div>
-  ${manualCard()}
+  ${isHens() ? `<div class="card">
+    <h2>Nachbar-Seite</h2>
+    <p class="muted" style="margin:0 0 8px">Öffentliche Seite ohne Anmeldung: ${esc(CONFIG.site)}/nachbarn</p>
+    <label class="muted" style="display:block">Hinweis für Nachbarn (z. B. Abholort oder Zeiten). Achtung: Der Text ist für alle sichtbar, die den Link kennen.</label>
+    <textarea rows="3" onchange="saveSetting({neighbor_note:this.value.trim()||null})">${esc(p.neighborNote)}</textarea>
+    <button class="yolk" style="width:100%;margin-top:12px" onclick="sheetNeighbors()">Link für Nachbarn teilen (WhatsApp)</button>
+  </div>` : ''}
+  ${isHens() ? pushCard() : ''}
   <div class="card">
     <h2>Wer ist bei „${esc(p.name)}“ dabei?</h2>
     ${members().map(f=>`<div class="mem">• ${esc(f.name)}</div>`).join('')}
     <p class="muted" style="margin:8px 0 0">Familien und Zuordnung zu den Projekten ändert der Admin.</p>
   </div>
-  ${isHens() ? `<div class="card">
-    <h2>Stall</h2>
+  ${S.admin ? `<details class="card" ${setOpen?'open':''} ontoggle="setOpen=this.open">
+    <summary><h2 style="margin:0">Einstellungen</h2><span class="pill">nur Admin</span></summary>
+  ${isHens() ? `<div>
+    <h2 style="font-size:17px;margin:18px 0 8px">Stall</h2>
     <label class="muted" style="display:block">Hennenbestand (die Legeleistung rechnet mit dem Bestand am jeweiligen Tag)</label>
     <div class="list" style="margin-top:4px">${p.hensHist.map(h => `<div class="item"><span>ab ${fmtDate(h.from)}</span><strong>${h.n} Hennen</strong></div>`).join('')}</div>
     <button class="alt small" style="margin-top:6px" onclick="sheetHens()">Bestand ändern</button>
@@ -2184,30 +2193,23 @@ function vHof(){
     <label class="muted" style="display:block;margin-top:10px">Preis pro Ei für Nachbarn, extern (€)</label>
     <input type="text" inputmode="decimal" value="${String(p.price).replace('.',',')}" onchange="saveSetting({price_extern:num(this.value)})">
   </div>` : ''}
-  ${isHens() ? `<div class="card">
-    <h2>Nachbar-Seite</h2>
-    <p class="muted" style="margin:0 0 8px">Öffentliche Seite ohne Anmeldung: ${esc(CONFIG.site)}/nachbarn</p>
-    <label class="muted" style="display:block">Hinweis für Nachbarn (z. B. Abholort oder Zeiten). Achtung: Der Text ist für alle sichtbar, die den Link kennen.</label>
-    <textarea rows="3" onchange="saveSetting({neighbor_note:this.value.trim()||null})">${esc(p.neighborNote)}</textarea>
-    <button class="yolk" style="width:100%;margin-top:12px" onclick="sheetNeighbors()">Link für Nachbarn teilen (WhatsApp)</button>
-  </div>` : ''}
-  ${isHens() ? pushCard() : ''}
-  ${S.admin ? `<div class="card">
-    <h2>Zahlung</h2>
+  <div>
+    <h2 style="font-size:17px;margin:18px 0 8px">Zahlung</h2>
     <label class="muted" style="display:block">PayPal.me-Name oder Link (für den Zahlungs-QR-Code in der Kasse)</label>
-    <input type="text" placeholder="z. B. paypal.me/rainaecker" value="${esc(p.paypal)}" onchange="saveSetting({paypal_me:normPaypal(this.value)||null})">
+    <input type="text" value="${esc(p.paypal)}" onchange="saveSetting({paypal_me:normPaypal(this.value)||null})">
     ${p.paypal ? `<p style="margin:10px 0 0"><strong>${esc(paypalLink(p.paypal, 0).replace('https://', ''))}</strong></p>
     <button class="alt small" style="margin-top:8px" onclick="sheetPayLink()">Link anzeigen, kopieren, teilen</button>` : ''}
   </div>
-  <div class="card">
-    <h2>Erfassung</h2>
+  <div>
+    <h2 style="font-size:17px;margin:18px 0 8px">Erfassung</h2>
     <label class="muted" style="display:block">Die App zählt Daten ab diesem Datum</label>
     <input type="date" value="${p.start}" onchange="saveSetting({start_date:this.value||null})">
     <p class="muted" style="margin:8px 0 0">Der Kalender, die Wochenübersicht und die Nachträge beginnen an diesem Tag. Frühere Einträge bleiben in der Datenbank erhalten.</p>
     ${isHens() ? `<label class="muted" style="display:block;margin-top:12px">Vorrat, Überschuss und Eierpreis zählen ab (Live-Start)</label>
     <input type="date" value="${p.live}" onchange="saveSetting({live_start:this.value||null})">
     <p class="muted" style="margin:8px 0 0">Eier davor zählen nur für die Statistik. Sie landen nicht im Vorrat und nicht im Überschuss.</p>` : ''}
-  </div>` : ''}
+  </div>
+  </details>` : ''}
   ${famCard()}
   ${auditCard()}
   ${S.admin ? `<div class="card">
@@ -2215,7 +2217,8 @@ function vHof(){
     <p class="muted" style="margin-top:0">Alle Familien dieses Projekts sehen dieselben Daten. Mit „Sichern“ speicherst du eine Kopie als Datei.</p>
     ${(() => { const b = backupInfo(); return `<p style="margin:0 0 10px;font-size:14px" class="${b.late ? 'neg' : 'muted'}">${b.d ? `Letzte Sicherung: ${fmtDay(parseD(b.d))}${b.days >= 31 ? ` (vor ${b.days} Tagen, Zeit für eine neue)` : ''}` : 'Noch keine Sicherung gemacht. Bitte jetzt eine speichern.'}</p>`; })()}
     <button class="alt" style="width:100%" onclick="exportData()">Sichern</button>
-  </div>` : ''}`;
+  </div>` : ''}
+  ${manualCard()}`;
 }
 function backupInfo(){
   const d = P().lastBackup, days = d ? daysSince(d) : null;
