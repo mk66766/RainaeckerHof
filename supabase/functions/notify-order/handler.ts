@@ -100,7 +100,7 @@ async function sendReminders(d: Deps, cfg: Record<string, string>, site: string,
   const [pr, mem, fam, sw, tx, ck] = await Promise.all([
     a.from("projects").select("id,kind,name,settings"),
     a.from("project_members").select("project_id,family_id"),
-    a.from("families").select("id,name,user_id"),
+    a.from("families").select("id,name,user_id,is_admin"),
     a.from("duty_swaps").select("project_id,week_start,family_id").eq("week_start", new Date(Date.parse(now.date + "T12:00:00Z") + 864e5).toISOString().slice(0, 10)),
     a.from("transactions").select("id,project_id,date,amount,pay_state,seller_id,parent_id").in("pay_state", ["bar_offen", "pruefen"]),
     a.from("cash_checks").select("project_id,created_at").order("created_at", { ascending: false }),

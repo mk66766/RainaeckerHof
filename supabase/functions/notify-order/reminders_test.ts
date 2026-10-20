@@ -7,7 +7,7 @@ const eq = (a: any, b: any, msg: string) => { n++; if (JSON.stringify(a) !== JSO
 const base = (over: Partial<Data> = {}): Data => ({
   projects: [{ id: "h", kind: "hens", name: "Hühner", settings: { last_backup: "2026-10-25" } }, { id: "g", kind: "goats", name: "Ziegen", settings: {} }],
   members: [{ project_id: "h", family_id: "A" }, { project_id: "h", family_id: "B" }, { project_id: "h", family_id: "C" }, { project_id: "g", family_id: "B" }, { project_id: "g", family_id: "C" }],
-  families: [{ id: "A", name: "Bader", user_id: "uA" }, { id: "B", name: "Hatesaul", user_id: "uB" }, { id: "C", name: "Kaufmann", user_id: "uC" }],
+  families: [{ id: "A", name: "Bader", user_id: "uA" }, { id: "B", name: "Hatesaul", user_id: "uB" }, { id: "C", name: "Kaufmann", user_id: "uC", is_admin: true }],
   swaps: [{ project_id: "h", week_start: "2026-10-26", family_id: "B" }, { project_id: "g", week_start: "2026-10-26", family_id: "C" }],
   tx: [], checks: [], ...over,
 });
@@ -51,7 +51,9 @@ eq(buildReminders(base({ tx: [chk(6), chk(3, "pq")] }), tue)[0].text, "2 PayPal-
 // --- Monatsabschluss
 const m1 = { date: "2026-11-01", weekday: 0, day: 1 };
 const monthly = (d: Data) => buildReminders(d, { date: "2026-11-01", weekday: 3, day: 1 }).map((i) => i.userId + ":" + i.text);
-eq(monthly(base({ checks: [], projects: [{ id: "h", kind: "hens", name: "Hühner", settings: {} }] })).length, 6, "1. des Monats ohne Abgleich und Sicherung (Hühner, 3 Familien): je 2 Hinweise");
+eq(monthly(base({ checks: [], projects: [{ id: "h", kind: "hens", name: "Hühner", settings: {} }] })).length, 2, "1. des Monats ohne Abgleich und Sicherung (Hühner): 2 Hinweise, nur an den Admin");
+eq([...new Set(monthly(base({ checks: [], projects: [{ id: "h", kind: "hens", name: "Hühner", settings: {} }] })).map((x) => x.split(":")[0]))], ["uC"], "Monatsabschluss geht nur an den Admin, nicht an die Familien");
+eq(monthly(base({ checks: [], families: [{ id: "A", name: "Bader", user_id: "uA" }, { id: "B", name: "Hatesaul", user_id: "uB" }, { id: "C", name: "Kaufmann", user_id: "uC" }] })), [], "kein Admin im Projekt: keine Monatsabschluss-Nachricht");
 eq(monthly(base({ checks: [{ project_id: "h", created_at: "2026-10-20T10:00:00Z" }, { project_id: "g", created_at: "2026-10-20T10:00:00Z" }], projects: [{ id: "h", kind: "hens", name: "Hühner", settings: { last_backup: "2026-10-20" } }, { id: "g", kind: "goats", name: "Ziegen", settings: { last_backup: "2026-10-30" } }] })), [], "alles aktuell: keine Monatsabschluss-Nachricht");
 eq(monthly(base({ checks: [{ project_id: "h", created_at: "2026-10-20T10:00:00Z" }], projects: [{ id: "h", kind: "hens", name: "Hühner", settings: {} }] })).every((x) => x.includes("Sicherung (Hühner)")), true, "nur die Sicherung fehlt: nur dieser Hinweis");
 eq(buildReminders(base({ checks: [], projects: [{ id: "h", kind: "hens", name: "Hühner", settings: {} }] }), { date: "2026-11-15", weekday: 1, day: 15 }).length, 0, "nicht am 1.: kein Monatsabschluss");

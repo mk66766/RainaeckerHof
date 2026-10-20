@@ -1,12 +1,12 @@
+-- Eingespielt am 20.10.2026 als Migration admin_only_settings_and_cash_checks.
 -- Nur der Admin (families.is_admin) darf: Kassenabgleich anlegen/löschen, Erfassung (start_date, live_start),
 -- Zahlung (paypal_me) und Sichern (last_backup) ändern. Alle anderen Einstellungen bleiben für jede Familie offen.
-
-drop policy if exists "Mitglieder erstellen Abgleiche" on public.cash_checks;
-drop policy if exists "Mitglieder löschen Abgleiche" on public.cash_checks;
-create policy "Admin erstellt Abgleiche" on public.cash_checks for insert to authenticated
+alter policy "Mitglieder erstellen Abgleiche" on public.cash_checks
   with check (app.is_member(project_id) and app.is_admin() and created_by = (select auth.uid()));
-create policy "Admin löscht Abgleiche" on public.cash_checks for delete to authenticated
+alter policy "Mitglieder erstellen Abgleiche" on public.cash_checks rename to "Admin erstellt Abgleiche";
+alter policy "Mitglieder löschen Abgleiche" on public.cash_checks
   using (app.is_member(project_id) and app.is_admin());
+alter policy "Mitglieder löschen Abgleiche" on public.cash_checks rename to "Admin löscht Abgleiche";
 
 create or replace function app.guard_project_settings() returns trigger language plpgsql security definer set search_path = '' as $$
 declare k text;
@@ -21,6 +21,5 @@ begin
 end $$;
 revoke all on function app.guard_project_settings() from public, anon, authenticated;
 
-drop trigger if exists guard_project_settings on public.projects;
 create trigger guard_project_settings before update on public.projects
   for each row execute function app.guard_project_settings();

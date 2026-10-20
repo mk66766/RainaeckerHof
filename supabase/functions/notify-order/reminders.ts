@@ -4,7 +4,7 @@ export type Project = { id: string; kind: string; name: string; settings?: Recor
 export type Data = {
   projects: Project[];
   members: { project_id: string; family_id: string }[];
-  families: { id: string; name: string; user_id: string | null }[];
+  families: { id: string; name: string; user_id: string | null; is_admin?: boolean | null }[];
   swaps: { project_id: string; week_start: string; family_id: string }[];
   tx: { id: string; project_id: string; date: string; amount: number | string; pay_state: string | null; seller_id: string | null; parent_id: string | null }[];
   checks: { project_id: string; created_at: string }[];
@@ -23,6 +23,7 @@ export function buildReminders(d: Data, now: Now): Item[] {
   const uidOf = (famId: string | null) => d.families.find((f) => f.id === famId)?.user_id || null;
   const membersOf = (pid: string) => d.members.filter((m) => m.project_id === pid).map((m) => uidOf(m.family_id)).filter(Boolean) as string[];
   const total = (t: Data["tx"][number]) => Number(t.amount) + d.tx.filter((x) => x.parent_id === t.id).reduce((s, x) => s + Number(x.amount), 0);
+  const adminsOf = (pid: string) => d.members.filter((m) => m.project_id === pid && d.families.find((f) => f.id === m.family_id)?.is_admin).map((m) => uidOf(m.family_id)).filter(Boolean) as string[];
   const kindOf = (pid: string) => d.projects.find((p) => p.id === pid)?.kind || "hens";
 
   // 1) Dienst: sonntags für die nächste Woche
@@ -56,7 +57,7 @@ export function buildReminders(d: Data, now: Now): Item[] {
     for (const uid of membersOf(p.id)) items.push({ userId: uid, title: "Zahlung prüfen", text, url: `#kasse:${p.kind}`, prio: 1 });
   }
 
-  // 4) Monatsabschluss: am 1. des Monats, wenn Abgleich oder Sicherung länger als 28 Tage her sind
+  // 4) Monatsabschluss: am 1. des Monats, wenn Abgleich oder Sicherung länger als 28 Tage her sind (nur an Admins, die dürfen beides)
   if (now.day === 1) {
     for (const p of d.projects) {
       const lines: string[] = [];
@@ -64,7 +65,7 @@ export function buildReminders(d: Data, now: Now): Item[] {
       if (!last || ageDays(last, now.date) > 28) lines.push(`Kassenabgleich (${label(p)}): Zeit für den monatlichen Abgleich.`);
       const bk = p.settings?.last_backup as string | undefined;
       if (!bk || ageDays(bk, now.date) > 28) lines.push(`Sicherung (${label(p)}): Zeit, die Daten zu sichern (Tab Hof).`);
-      for (const uid of membersOf(p.id)) for (const text of lines) items.push({ userId: uid, title: "Monatsabschluss", text, url: `#kasse:${p.kind}`, prio: 3 });
+      for (const uid of adminsOf(p.id)) for (const text of lines) items.push({ userId: uid, title: "Monatsabschluss", text, url: `#kasse:${p.kind}`, prio: 3 });
     }
   }
   return items;
