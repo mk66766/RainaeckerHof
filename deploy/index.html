@@ -373,7 +373,7 @@ async function loadProject(){
   }
 }
 async function setProject(id){
-  S.cur = id; lsSet('hof-cur', id); audit = {rows:[], done:false, open:false};
+  S.cur = id; lsSet('hof-cur', id); audit = {rows:[], done:false, open:false}; txShow = 15;
   try{ await loadProject(); }catch(e){ toast('Fehler: ' + (e.message||e)); return; }
   tab = TABS[S.p.kind][0][0]; render(); window.scrollTo(0,0);
 }
@@ -396,16 +396,24 @@ function showLogin(){
       <div class="seg" style="flex-wrap:wrap">${loginChoices().map(f =>
         `<button class="${selLogin===f.email?'on':''}" onclick="selLogin='${f.email}';loginMsg='';showLogin()" style="flex:1 1 40%">${esc(f.name)}</button>`).join('')}</div>
       <label class="muted" style="display:block;margin:14px 0 4px" for="code">Dein Code</label>
-      <input id="code" type="password" inputmode="numeric" autocomplete="current-password" placeholder="6-stelliger Code" onkeydown="if(event.key==='Enter')doLogin()">
+      <input id="code" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password" placeholder="6-stelliger Code" onkeydown="if(event.key==='Enter')doLogin()" oninput="codeTyped(this)">
       ${loginMsg ? `<p class="err">${esc(loginMsg)}</p>` : ''}
       <button class="yolk" style="width:100%;margin-top:14px" onclick="doLogin()" ${selLogin?'':'disabled'}>Anmelden</button>
     </div>`;
 }
+// Nach der 6. Ziffer gleich anmelden, ohne Enter
+function codeTyped(el){
+  if(!/^\d{6}$/.test(el.value)) return;
+  if(!selLogin){ loginMsg = 'Bitte zuerst oben deine Familie antippen.'; showLogin(); return; }
+  doLogin();
+}
+let loginBusy = false;
 async function doLogin(){
-  if(!selLogin) return;
+  if(!selLogin || loginBusy) return;
   const code = document.getElementById('code').value;
   if(!code){ loginMsg = 'Bitte Code eingeben.'; showLogin(); return; }
-  const {data, error} = await sb.auth.signInWithPassword({email: selLogin, password: code});
+  loginBusy = true;
+  const {data, error} = await sb.auth.signInWithPassword({email: selLogin, password: code}).finally(() => { loginBusy = false; });
   if(error){ loginMsg = 'Name oder Code stimmt nicht.'; showLogin(); return; }
   loginMsg = '';
   try{ await boot(data.user); }catch(e){ document.getElementById('app').innerHTML = `<div class="card"><h2>Fehler beim Laden</h2><p class="muted">${esc(e.message||e)}</p><button class="alt" onclick="logout()">Abmelden</button></div>`; }
@@ -1310,7 +1318,7 @@ function vKasse(){
     hint = laidAll>0 ? `Netto-Kosten pro Ei: ${eur((exp-inc)/laidAll)} (bei ${laidAll} Eiern)` : 'Kosten pro Ei erscheinen, sobald Eier eingetragen sind.';
   } else { const eFam = sum(p.tx.filter(t => t.kind==='ausgabe' && t.fam), t => t.amt); hint = `Von Familien bezahlte Kosten: ${eur(eFam)} · pro Familie ${eur(eFam/p.members.length)}`; }
   const bal = balances(), set = settlements();
-  const txs = p.tx.filter(t => !t.parent).sort((a,b)=> b.date.localeCompare(a.date) || String(b.at||'').localeCompare(String(a.at||'')) || String(b.id).localeCompare(String(a.id))).slice(0,15);
+  const txs = p.tx.filter(t => !t.parent).sort((a,b)=> b.date.localeCompare(a.date) || String(b.at||'').localeCompare(String(a.at||'')) || String(b.id).localeCompare(String(a.id))).slice(0, txShow), txMore = p.tx.filter(t => !t.parent).length - txs.length;
   return `
   <div class="card">
     <div class="muted" style="margin-bottom:8px">Kasse: ${esc(p.name)}</div>
@@ -1340,6 +1348,7 @@ function vKasse(){
   <div class="card list">
     <h2>Buchungen</h2>
     ${txs.length ? txs.map(t => txRow(t)).join('') : '<div class="empty">Noch keine Buchungen.</div>'}
+    ${txMore > 0 ? `<button class="alt" style="width:100%;margin-top:10px" onclick="txShow+=20;render()">Ältere Buchungen anzeigen (noch ${txMore})</button>` : ''}
   </div>`;
 }
 /* ================= Zahlungsstatus, Kontrolle und Kassenabgleich ================= */
@@ -1558,7 +1567,7 @@ function saleCalc(){
   rc.value = money(Math.floor(num(val('n'))) * num(val('p')));
 }
 let txKind='ausgabe';
-let kasseOpen = false, setOpen = false;
+let kasseOpen = false, setOpen = false, txShow = 15;
 const payerOptions = sel => members().map(f => `<option value="${f.id}" ${sel!==null && f.id===(sel||defFam())?'selected':''}>${esc(f.name)}</option>`).join('')
   + `<option value="" ${sel===null?'selected':''}>Gemeinschaftskasse</option>`;
 function sheetTx(d0){
@@ -2070,7 +2079,7 @@ function manualCard(){
     <li>Hat deine Familie Dienst, steht oben <b>Du hast diese Woche Dienst</b>. Beim ersten Öffnen der Woche kommt dazu einmal ein kurzer Hinweis.</li>
     <li>Bei Anzahlen kannst du mit <b>−</b> und <b>+</b> tippen statt die Zahl einzugeben. Kurze Erklärungen klappst du mit <b>ⓘ</b> auf.</li></ul>`);
   const fehler = manDet('fehler', 'Fehler korrigieren und Protokoll', `<ul>
-    <li><b>Vertippt?</b> Tippe im Kalender (Tab <b>Dienst</b>) auf den Tag. Dort kannst du Einträge ändern oder mit ✕ löschen.${hens?' Das geht auch im eingeklappten <b>Verlauf</b> im Tab <b>Eier</b>.':''} Buchungen löschst du in der Kasse mit ✕.</li>
+    <li><b>Vertippt?</b> Tippe im Kalender (Tab <b>Dienst</b>) auf den Tag. Dort kannst du Einträge ändern oder mit ✕ löschen.${hens?' Das geht auch im eingeklappten <b>Verlauf</b> im Tab <b>Eier</b>.':''} Buchungen löschst du in der Kasse mit ✕. Die Kasse zeigt die letzten 15 Buchungen, mit <b>Ältere Buchungen anzeigen</b> siehst du weitere.</li>
     <li>Einträge der letzten <b>14 Tage</b> kann jede Familie ändern, ältere nur ein Admin.</li>
     <li>Im Tab <b>Hof</b> zeigt das <b>Änderungsprotokoll</b>, wer wann etwas geändert oder gelöscht hat. Im <b>Verlauf</b> der Eier und in der Tagesansicht steht bei jedem Eintrag, wer ihn gemacht hat und wann.</li></ul>`);
   const kasse = manDet('kasse', 'Kasse und Abrechnung', `<ul>
