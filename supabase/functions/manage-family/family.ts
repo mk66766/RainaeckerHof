@@ -53,6 +53,8 @@ export function makeFamilyHandler(d: Deps) {
       await a.from("audit_log").insert(pids.map((pid) => ({ table_name: "families", action: "UPDATE", record_id: recordId, project_id: pid, changed_by: u.user.id, family_name: me.name, old_data: oldData, new_data: newData })));
     };
     const target = () => fams.find((f) => f.id === b.family_id);
+    // Code für den Admin aufheben (Tabelle family_codes, nur Admins dürfen lesen; nie im Änderungsprotokoll)
+    const saveCode = async (fid: string, code: string) => !(await a.from("family_codes").upsert({ family_id: fid, code, set_at: new Date().toISOString() })).error;
 
     // 2) Aktionen
     if (b.action === "add") {
@@ -73,7 +75,8 @@ export function makeFamilyHandler(d: Deps) {
       const f2 = await a.from("project_members").insert(pids.map((pid) => ({ project_id: pid, family_id: id })));
       if (f2.error) { await a.from("families").delete().eq("id", id); await a.auth.admin.deleteUser(created.user.id); return fail("Familie konnte nicht angelegt werden.", 500); }
       await audit(pids, {}, { name: isAdminAccount ? `${name} (Admin-Konto)` : name, projekte: pnames(pids), is_admin: isAdminAccount || b.is_admin === true }, id);
-      return json({ ok: true, family: { id, name, email: `${slug}@huehner.local`, admin_account: isAdminAccount } });
+      const codeSaved = await saveCode(id, String(b.code));
+      return json({ ok: true, code_saved: codeSaved, family: { id, name, email: `${slug}@huehner.local`, admin_account: isAdminAccount } });
     }
 
     const t = target();
@@ -85,7 +88,7 @@ export function makeFamilyHandler(d: Deps) {
       const r = await a.auth.admin.updateUserById(t.user_id, { password: String(b.code) });
       if (r.error) return fail("Code konnte nicht geändert werden.", 500);
       await audit(myProjects(t.id), {}, { zugang: `neuer Code für ${t.name} gesetzt` }, t.id);
-      return json({ ok: true });
+      return json({ ok: true, code_saved: await saveCode(t.id, String(b.code)) });
     }
 
     if (b.action === "set_admin") {
@@ -122,6 +125,7 @@ export function makeFamilyHandler(d: Deps) {
       if (f.error) return fail("Entfernen fehlgeschlagen.", 500);
       const ban = await a.auth.admin.updateUserById(t.user_id, { ban_duration: "876000h" });
       const kill = await a.rpc("kill_sessions", { uid: t.user_id });
+      await a.from("family_codes").delete().eq("family_id", t.id);       // gesperrter Zugang: Code wird nicht mehr gebraucht
       await audit(old, { name: t.name, projekte: pnames(old), left_on: null, login: "aktiv" }, { name: t.name, projekte: "–", left_on: day, login: "gesperrt" }, t.id);
       return json({ ok: true, banned: !ban.error, sessions_closed: !kill.error });
     }

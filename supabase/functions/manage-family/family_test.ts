@@ -15,11 +15,13 @@ function world(opts: { failInsert?: string[]; banFails?: boolean; extraFams?: Ro
     projects: [{ id: "h", kind: "hens", name: "Hühner" }, { id: "g", kind: "goats", name: "Ziegen" }],
     project_members: [{ project_id: "h", family_id: "A" }, { project_id: "h", family_id: "B" }, { project_id: "h", family_id: "C" }, { project_id: "g", family_id: "B" }, { project_id: "g", family_id: "C" }],
     audit_log: [],
+    family_codes: [],
   };
   const tokens: Record<string, string> = { jA: "uA", jB: "uB", jC: "uC", jX: "uX", jN: "u100" };
   const log = { created: [] as any[], updated: [] as any[], deleted: [] as string[], killed: [] as string[], emails: new Set<string>(["bader@huehner.local"]) };
   const from = (t: string) => ({
     select: () => Promise.resolve({ data: (db[t] || []).map((r) => ({ ...r })), error: null }),
+    upsert: async (row: Row) => { db[t] = db[t].filter((r) => r.family_id !== row.family_id); db[t].push({ ...row }); return { error: null }; },
     insert: async (rows: Row | Row[]) => { if (opts.failInsert?.includes(t)) return { error: { message: "x" } }; (Array.isArray(rows) ? rows : [rows]).forEach((r) => db[t].push({ ...r })); return { error: null }; },
     update: (vals: Row) => ({ eq: async (c: string, v: any) => { db[t].filter((r) => r[c] === v).forEach((r) => Object.assign(r, vals)); return { error: null }; } }),
     delete: () => { const f: [string, any][] = []; const b: any = { eq: (c: string, v: any) => { f.push([c, v]); return b; }, then: (res: any) => { db[t] = db[t].filter((r) => !f.every(([c, v]) => r[c] === v)); res({ error: null }); } }; return b; },
@@ -61,6 +63,7 @@ eq([r.s, r.j.family.email, r.j.family.name], [200, "mueller@huehner.local", "Mü
 eq(w.log.created.map((c) => [c.email, c.password, c.email_confirm]), [["mueller@huehner.local", "123456", true]], "  Login mit dem 6-stelligen Code, ohne Bestätigungsmail");
 eq(w.db.families.find((f) => f.name === "Müller"), { id: "NEU1", name: "Müller", user_id: "u100", is_admin: true, is_system: false }, "  Familie mit Verwalter-Recht angelegt");
 eq(w.db.project_members.filter((m) => m.family_id === "NEU1").map((m) => m.project_id).sort(), ["g", "h"], "  in beide Projekte aufgenommen");
+eq([r.j.code_saved, w.db.family_codes.map((c) => [c.family_id, c.code])], [true, [["NEU1", "123456"]]], "  Code für den Admin aufgehoben");
 eq(w.db.audit_log.map((a) => [a.project_id, a.table_name, a.family_name, a.new_data.name, a.new_data.projekte]), [["h", "families", "Kaufmann", "Müller", "Hühner, Ziegen"], ["g", "families", "Kaufmann", "Müller", "Hühner, Ziegen"]], "  Eintrag im Änderungsprotokoll je Projekt");
 eq(JSON.stringify(w.db.audit_log).includes("123456"), false, "  der Code steht nirgends im Protokoll");
 r = await w.call({ action: "add", name: "Nurhühner", code: "654321", project_ids: ["h"] });
@@ -93,6 +96,9 @@ r = await w.call({ action: "reset_code", family_id: "B", code: "246810" });
 eq([r.s, w.log.updated], [200, [{ id: "uB", attrs: { password: "246810" } }]], "Code ändern: neues Passwort gesetzt");
 eq(JSON.stringify(w.db.audit_log).includes("246810"), false, "  der neue Code steht nicht im Protokoll");
 eq(w.db.audit_log.length > 0 && w.db.audit_log[0].new_data.zugang.includes("Hatesaul"), true, "  aber dass er geändert wurde");
+eq([r.j.code_saved, w.db.family_codes.filter((c) => c.family_id === "B").map((c) => c.code)], [true, ["246810"]], "  neuer Code für den Admin aufgehoben");
+r = await w.call({ action: "reset_code", family_id: "B", code: "135790" });
+eq(w.db.family_codes.filter((c) => c.family_id === "B").map((c) => c.code), ["135790"], "  nochmal ändern: alter Code wird ersetzt");
 eq((await w.call({ action: "reset_code", family_id: "B", code: "12ab56" })).s, 400, "Code mit Buchstaben abgelehnt");
 eq((await w.call({ action: "reset_code", family_id: "ZZ", code: "123456" })).s, 404, "unbekannte Familie: 404");
 eq((await w.call({ action: "reset_code", family_id: "X", code: "123456" })).s, 409, "ausgetretene Familie: 409");
@@ -154,4 +160,10 @@ await w.call({ action: "set_admin", family_id: "C", is_admin: false }, "jC");
 r = await w.call({ action: "add", name: "Neu", code: "111111", project_ids: ["h"] }, "jN");
 eq(r.s, 200, "das Admin-Konto kann nach dem Entzug bei Kaufmann Familien aufnehmen");
 eq((await w.call({ action: "remove", family_id: "NEU1" }, "jN")).s, 400, "und sich nicht selbst entfernen");
+// --- aufgehobene Codes beim Entfernen
+w = world();
+await w.call({ action: "reset_code", family_id: "B", code: "246810" });
+eq(w.db.family_codes.length, 1, "Code von Hatesaul aufgehoben");
+await w.call({ action: "remove", family_id: "B" });
+eq(w.db.family_codes.length, 0, "  beim Entfernen wird der aufgehobene Code gelöscht");
 console.log(`\n${gut} von ${n} Prüfungen bestanden`);

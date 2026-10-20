@@ -19,7 +19,7 @@ Verwaltungs-App für zwei Gemeinschaftsprojekte: **Hühner** (Familien Bader, Ha
 - Datenbank-Migrationen (in dieser Reihenfolge angewendet): `initial_schema_huehner_hof`, `admin_role_calendar_events_edit_window`, `audit_log_changes`, `tierfotos_storage`, `transactions_settlement_kinds`. Das aktuelle Schema direkt aus Supabase lesen (list_tables, `supabase db dump`).
 
 ## Login
-Pro Familie ein Supabase-Auth-Nutzer `<familienname-klein>@huehner.local` mit 6-stelligem Code als Passwort (Codes bewusst nicht dokumentiert, die Familien kennen sie). Auf dem Login-Bildschirm wählt man die Familie, die Namen/Adressen stehen in `CONFIG.families`. Alle vier Familien sind Admin (`families.is_admin`).
+Pro Familie ein Supabase-Auth-Nutzer `<familienname-klein>@huehner.local` mit 6-stelligem Code als Passwort. Codes stehen nie in Code, Doku oder Chat. **Seit 20.10.2026 (Wunsch des Nutzers):** Die Edge Function `manage-family` (v3) hebt bei „Hinzufügen“ und „Code ändern“ den Code in der Tabelle `family_codes` auf (nur Admins dürfen lesen, nur die Funktion schreibt, beim Entfernen gelöscht, nie im Änderungsprotokoll). In der App: Familien → Bearbeiten → „Code anzeigen“ und „Einladung senden“; nach Hinzufügen/Code ändern öffnet sich die Einladung (`sheetInvite()`, Text mit Link, Name, Code; WhatsApp/Kopieren). Codes von vor dem 20.10.2026 sind nicht hinterlegt. Auf dem Login-Bildschirm wählt man die Familie, die Namen/Adressen stehen in `CONFIG.families`. Alle vier Familien sind Admin (`families.is_admin`).
 **Prüfen:** Ob „Allow new users to sign up“ in Supabase Auth ausgeschaltet ist, ist nicht bestätigt.
 
 ## UI-Entscheidungen

@@ -2006,7 +2006,7 @@ function famCard(){
   return `
   <div class="card list">
     <div class="row"><h2 style="margin:0"><span class="hi" aria-hidden="true">👪</span>Familien</h2><button class="alt small" onclick="sheetFamAdd()">Hinzufügen</button></div>
-    <p class="muted" style="margin:6px 0 8px;font-size:14px">Nur für Verwalter: Familien aufnehmen, Projekte zuteilen, Zugangscode ändern, Verwalter-Recht vergeben oder Familien entfernen.</p>
+    <p class="muted" style="margin:6px 0 8px;font-size:14px">Nur für Verwalter: Familien aufnehmen und einladen, Projekte zuteilen, Zugangscode anzeigen oder ändern, Verwalter-Recht vergeben oder Familien entfernen.</p>
     ${act.map(f => `<div class="item"><div>${esc(f.name)}${tag(f)}<div style="margin-top:4px">${chips(f) || '<span class="muted">in keinem Projekt</span>'}</div></div><button class="alt small" onclick="sheetFamEdit('${f.id}')">Bearbeiten</button></div>`).join('')}
     ${sys.map(f => `<div class="item"><div>${esc(f.name)}${tag(f)}<div style="margin-top:4px"><span class="pc good">Admin-Konto</span> <span class="muted" style="font-size:14px">sieht alles, zählt nicht als Familie</span></div></div><button class="alt small" onclick="sheetFamEdit('${f.id}')">Bearbeiten</button></div>`).join('')}
     ${gone.length ? `<p class="muted" style="margin:10px 0 0;font-size:14px">Ausgetreten: ${gone.map(f => `${esc(f.name)} (${fmtDay(parseD(f.left))})`).join(', ')}</p>` : ''}
@@ -2033,7 +2033,9 @@ async function doFamAdd(){
   const name = val('fa_n').trim(), code = val('fa_c').trim(), err = document.getElementById('fa_err'), adm = document.getElementById('fa_s').checked;
   try{
     await famCall(adm ? {action:'add', name, code, account:'admin', project_ids:[]} : {action:'add', name, code, project_ids: pickedProjects('fp'), is_admin: document.getElementById('fa_a').checked});
-    closeSheet(); await famDone(adm ? `Admin-Konto ${name} ist angelegt` : `${name} ist jetzt dabei`); if(!adm) await dutyHint();
+    closeSheet(); await famDone(adm ? `Admin-Konto ${name} ist angelegt` : `${name} ist jetzt dabei`);
+    const nf = S.fams.find(x => x.name.toLowerCase() === name.toLowerCase()); if(nf) sheetInvite(nf.id, code);
+    if(!adm) await dutyHint();
   }catch(e){ if(err) err.textContent = e.message || String(e); }
 }
 function sheetFamEdit(id){
@@ -2043,6 +2045,7 @@ function sheetFamEdit(id){
     <button class="yolk" style="width:100%;margin-top:12px" onclick="doFamProjects('${id}')">Projekte speichern</button>
     <div class="item" style="margin-top:16px"><div>Verwalter<div class="muted" style="font-size:14px">Darf Familien verwalten und ältere Einträge ändern</div></div><button class="alt small" onclick="doFamAdmin('${id}', ${!f.admin})">${f.admin ? 'Recht entziehen' : 'Zum Verwalter machen'}</button></div>`;
   openSheet(`${esc(f.name)} bearbeiten`, `${projects}
+    <div class="item" style="margin-top:16px"><div>Zugangscode<div class="muted" style="font-size:14px" id="fe_code">wird nur auf Wunsch angezeigt</div></div><button class="alt small" onclick="showFamCode('${id}')">Code anzeigen</button></div>
     <label style="margin-top:18px">Neuer Zugangscode (6 Ziffern)</label><input id="fe_c" type="text" inputmode="numeric" maxlength="6" autocomplete="off">
     <button class="alt" style="width:100%;margin-top:8px" onclick="doFamCode('${id}')">Code ändern</button>
     <p id="fe_err" class="err"></p>
@@ -2063,9 +2066,33 @@ async function doFamProjects(id){
   try{ await famCall({action:'set_projects', family_id:id, project_ids: pickedProjects('fe')}); closeSheet(); await famDone('Projekte gespeichert'); await dutyHint(); }
   catch(e){ if(err) err.textContent = e.message || String(e); }
 }
+// Hinterlegten Code zeigen (Tabelle family_codes, nur der Admin darf lesen)
+async function showFamCode(id){
+  const el = document.getElementById('fe_code'); if(!el) return;
+  const {data, error} = await sb.from('family_codes').select('code,set_at').eq('family_id', id).maybeSingle();
+  if(error){ el.textContent = 'Konnte nicht geladen werden.'; return; }
+  if(!data){ el.textContent = 'Kein Code hinterlegt (vor dem 20.10.2026 vergeben). Vergib unten einen neuen, dann ist er hier zu sehen.'; return; }
+  el.innerHTML = `<strong style="font-size:22px;letter-spacing:3px;color:var(--ink)">${esc(data.code)}</strong> <span>· seit ${fmtDay(new Date(data.set_at))}</span><br><button class="alt small" style="margin-top:6px" onclick="sheetInvite('${id}','${esc(data.code)}')">Einladung senden</button>`;
+}
+// Einladung mit Link, Name und Code zum Verschicken
+function inviteText(f, code){
+  return `Hallo ${f.system ? '' : 'Familie '}${f.name}! 🐔\nIhr seid beim Rainäcker Hof dabei.\n\nSo meldet ihr euch an:\n1. App öffnen: ${CONFIG.site}\n2. Oben „${f.name}“ antippen\n3. Code eingeben: ${code}\n\nTipp: Im Browser-Menü „Zum Startbildschirm hinzufügen“, dann startet die App wie jede andere.\n\nLiebe Grüße vom Rainäcker Hof`;
+}
+function sheetInvite(id, code){
+  const f = S.fams.find(x => x.id === id); if(!f) return;
+  openSheet(`Einladung für ${f.name}`, `<p class="muted" style="margin:0">Schick die Nachricht nur direkt an ${esc(f.name)}, nicht in eine Gruppe: Sie enthält den Zugangscode.</p>
+    <label>Nachricht (du kannst sie ändern)</label><textarea id="inv" rows="11">${esc(inviteText(f, code))}</textarea>
+    <div class="grid2" style="margin-top:12px"><button class="yolk" onclick="window.open('https://wa.me/?text=' + encodeURIComponent(val('inv')), '_blank', 'noopener')">Per WhatsApp senden</button><button class="alt" onclick="invCopy()">Text kopieren</button></div>
+    <button class="alt" style="width:100%;margin-top:10px" onclick="closeSheet()">Schließen</button>`);
+}
+function invCopy(){
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(val('inv')).then(() => toast('Text kopiert'), () => toast('Kopieren nicht möglich'));
+  else toast('Kopieren wird hier nicht unterstützt');
+}
 async function doFamCode(id){
   const err = document.getElementById('fe_err');
-  try{ await famCall({action:'reset_code', family_id:id, code: val('fe_c').trim()}); closeSheet(); toast('Neuer Code gespeichert'); }
+  const code = val('fe_c').trim();
+  try{ await famCall({action:'reset_code', family_id:id, code}); closeSheet(); toast('Neuer Code gespeichert'); sheetInvite(id, code); }
   catch(e){ if(err) err.textContent = e.message || String(e); }
 }
 async function doFamRemove(id){
@@ -2231,6 +2258,8 @@ function manualCard(){
         <li>Ein <b>Admin-Konto</b> (beim Hinzufügen „Admin-Konto statt Familie“) ist ein eigener Zugang nur für die Verwaltung: Er sieht und bearbeitet alles, zählt aber nirgends als Familie mit, also kein Dienst, kein Wochenanspruch und kein Kostenanteil.</li>
         <li>Beim Entfernen verliert die Familie den Zugang und wird aus allen Projekten genommen. Ihre bisherigen Einträge, Buchungen und der Name in der Historie bleiben erhalten. Dich selbst kannst du nicht entfernen.</li>
         <li>Nach jeder Änderung fragt die App, ob der <b>Dienstplan</b> neu verteilt werden soll (Tab Dienst, „Plan füllen“, für jedes Projekt einzeln). Offene Zahlungen einer ausgetretenen Familie vorher klären.</li>
+        <li>Nach <b>Hinzufügen</b> und nach <b>Code ändern</b> öffnet sich die Einladung mit Link, Name und Code. Mit <b>Per WhatsApp senden</b> oder <b>Text kopieren</b> schickst du sie an die Familie, am besten direkt und nicht in eine Gruppe.</li>
+        <li>Unter <b>Bearbeiten</b> zeigt <b>Code anzeigen</b> den zuletzt vergebenen Code, mit <b>Einladung senden</b> kannst du ihn erneut verschicken. Codes von vor dem 20.10.2026 sind nicht hinterlegt: Vergib dann einen neuen.</li>
         <li>Alle Änderungen stehen im <b>Änderungsprotokoll</b>. Die Codes selbst stehen dort nie.</li></ul>`),
       manDet('push', 'Benachrichtigungen aufs Handy', `<ul>
         <li>Im Tab <b>Hof</b> tippst du bei „Benachrichtigungen“ auf <b>Benachrichtigungen einschalten</b> und erlaubst die Nachrichten. Danach bekommst du eine Nachricht aufs Handy, sobald ein Nachbar Eier bestellt. Ein Tipp darauf öffnet die App bei den Bestellungen.</li>
