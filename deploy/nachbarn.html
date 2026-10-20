@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Frische Eier – Rainäcker Hof</title>
+<meta name="description" content="Aktueller Eier-Bestand, Preis und Abholung beim Rainäcker Hof">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#263829">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rainäcker Hof">
+<meta property="og:title" content="Frische Eier vom Rainäcker Hof">
+<meta property="og:description" content="Hier siehst du, wie viele Eier gerade da sind, was sie kosten und bei wem du sie holen kannst.">
+<meta property="og:url" content="https://rainaecker-hof-rtti.netlify.app/nachbarn">
+<meta property="og:locale" content="de_DE">
+<meta property="og:image" content="https://rainaecker-hof-rtti.netlify.app/og-image.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Goldenes Ei auf grünen Hügeln mit dem Schriftzug Rainäcker Hof">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+:root{
+  color-scheme: light;
+  --bg:#EDF1E8; --surface:#FFFFFF; --ink:#1E2A22; --muted:#66746B; --line:#D5DDCF;
+  --yolk:#F4B400; --yolk-ink:#2B2000; --good:#2E7D4F; --bad:#B3402F;
+  --head:'Trebuchet MS',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --body:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    color-scheme: dark;
+    --bg:#141A16; --surface:#1E2721; --ink:#EAF0E6; --muted:#9AA99F; --line:#2E3A32;
+    --good:#6CC28D; --bad:#F0907F;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.45}
+body{padding:env(safe-area-inset-top,0px) 0 calc(24px + env(safe-area-inset-bottom,0px))}
+main{max-width:520px;margin:0 auto;padding:18px 16px}
+header{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.logo{width:46px;height:46px;border-radius:12px;flex:none}
+h1{font-family:var(--head);font-size:26px;line-height:1.1;margin:0;font-weight:800}
+.sub{color:var(--muted);font-size:15px;margin-top:2px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px}
+.big{display:flex;align-items:baseline;gap:10px}
+.num{font-family:var(--head);font-weight:800;font-size:72px;line-height:1}
+.num.zero{color:var(--muted)}
+.unit{font-size:22px;font-weight:600}
+.state{margin:6px 0 0;color:var(--muted);font-size:16px}
+.row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:0}
+.row span{color:var(--muted)}
+.row strong{text-align:right;font-size:18px}
+.note{white-space:pre-wrap;word-wrap:break-word}
+.note h2{font-size:15px;margin:0 0 6px;color:var(--muted);font-weight:600}
+button{font:inherit;font-weight:600;cursor:pointer;border:0;border-radius:12px;padding:12px 16px;background:var(--ink);color:var(--bg);width:100%}
+button:focus-visible{outline:3px solid var(--yolk);outline-offset:2px}
+.foot{color:var(--muted);font-size:14px;text-align:center;margin-top:10px}
+.err{color:var(--bad);font-weight:600}
+.card h2{font-size:19px;margin:0 0 10px;font-family:var(--head)}
+label{display:block;font-size:14px;color:var(--muted);margin:12px 0 4px}
+input{font:inherit;color:var(--ink);background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:11px 12px;width:100%}
+input:focus-visible{outline:3px solid var(--yolk);outline-offset:2px}
+button.yolk{background:var(--yolk);color:var(--yolk-ink);margin-top:14px}
+button:disabled{opacity:.5;cursor:default}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.msg{margin:10px 0 0;font-weight:600}
+.msg.ok{color:var(--good)}
+.msg.bad{color:var(--bad)}
+.hint{color:var(--muted);font-size:14px;margin:10px 0 0}
+.thanks{border:2px solid var(--yolk)}
+.thanks strong{font-size:19px}
+@media (prefers-reduced-motion:no-preference){.num{transition:opacity .2s}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#263829"/><path d="M32 12c-8 0-14 11-14 21a14 14 0 0 0 28 0c0-10-6-21-14-21z" fill="#F4B400"/><ellipse cx="25" cy="24" rx="4.5" ry="7" fill="#FFD65A" opacity=".55"/></svg>
+    <div><h1>Rainäcker Hof</h1><div class="sub">Frische Eier</div></div>
+  </header>
+
+  <section class="card" aria-live="polite">
+    <div class="big"><span class="num zero" id="num">–</span><span class="unit" id="unit">Eier</span></div>
+    <p class="state" id="state">Lade aktuellen Stand …</p>
+  </section>
+
+  <section class="card" id="details" hidden>
+    <div class="row"><span>💰 Preis</span><strong id="price">–</strong></div>
+    <div class="row"><span>📍 Abholung bei</span><strong id="duty">–</strong></div>
+  </section>
+
+  <section class="card note" id="notebox" hidden><h2>Hinweis</h2><div id="note"></div></section>
+
+  <section class="card thanks" id="thanks" hidden aria-live="polite"><strong id="thanksTitle"></strong><p class="hint" id="thanksText" style="font-size:16px;color:inherit"></p></section>
+
+  <section class="card" id="orderbox" hidden>
+    <h2>Eier bestellen</h2>
+    <form id="orderform" novalidate>
+      <label for="who">Familie</label>
+      <input id="who" type="text" maxlength="80" autocomplete="name" required>
+      <label for="qty">Anzahl Eier</label>
+      <input id="qty" type="number" inputmode="numeric" min="1" max="100" required>
+      <div class="hp" aria-hidden="true"><label for="hp">Bitte leer lassen</label><input id="hp" type="text" tabindex="-1" autocomplete="off"></div>
+      <button class="yolk" id="send" type="submit">Bestellen</button>
+      <p class="msg" id="orderMsg" role="status"></p>
+    </form>
+    <p class="hint">Deine Eier werden für dich zurückgelegt. Du holst sie bei der Familie ab, die oben steht.</p>
+  </section>
+
+  <button id="reload" type="button">Aktualisieren</button>
+  <p class="foot" id="stand"></p>
+</main>
+
+<script>
+const API = 'https://ubboukewvvrriraxfuzn.supabase.co/rest/v1/rpc/neighbor_info';
+// öffentlicher Schlüssel (anon): erlaubt nur diese eine Abfrage, alle Tabellen sind ohne Anmeldung gesperrt
+const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViYm91a2V3dnZycmlyYXhmdXpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxMzI0MjIsImV4cCI6MjEwNzcwODQyMn0.iNEwD9cybcurN-TLWdsVsjV5KrjfHYW0AMIDgt61r1s';
+const $ = id => document.getElementById(id);
+let last = {n:0, duty:''};
+const NAME_KEY = 'hof-nachbar-name';
+const store = { get(){ try{ return localStorage.getItem(NAME_KEY) || ''; }catch(e){ return ''; } }, set(v){ try{ localStorage.setItem(NAME_KEY, v); }catch(e){} } };
+const eur = n => Number(n).toLocaleString('de-DE', {style:'currency', currency:'EUR'});
+
+function show(d){
+  const n = Math.max(0, Math.floor(Number(d.available) || 0));
+  const num = $('num');
+  num.textContent = n; num.classList.toggle('zero', n === 0);
+  $('unit').textContent = n === 1 ? 'Ei' : 'Eier';
+  $('state').textContent = n > 0 ? (n === 1 ? 'ist gerade verfügbar.' : 'sind gerade verfügbar.') : 'Gerade sind keine Eier übrig. Schau später gern noch einmal vorbei.';
+  $('state').classList.remove('err');
+  $('price').textContent = d.price !== null && d.price !== undefined ? eur(d.price) + ' pro Ei' : 'auf Anfrage';
+  const duty = d.duty ? (/^familie\s/i.test(d.duty) ? d.duty : 'Familie ' + d.duty) : 'bitte kurz nachfragen';
+  $('duty').textContent = duty;
+  $('details').hidden = false;
+  const q = $('qty'); q.max = Math.max(1, n);
+  if(Number(q.value) > n && n > 0) q.value = n;
+  $('orderbox').hidden = n < 1;
+  last = {n, duty};
+  const note = (d.note || '').trim();
+  $('notebox').hidden = !note; $('note').textContent = note;
+  const t = d.updated ? new Date(d.updated) : new Date();
+  $('stand').textContent = 'Stand: ' + t.toLocaleDateString('de-DE', {day:'numeric', month:'long'}) + ', ' + t.toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'}) + ' Uhr';
+}
+function fail(){
+  $('num').textContent = '–'; $('num').classList.add('zero'); $('unit').textContent = '';
+  $('state').textContent = 'Der Stand konnte gerade nicht geladen werden. Bitte versuche es gleich noch einmal.';
+  $('state').classList.add('err');
+  $('details').hidden = true; $('notebox').hidden = true; $('orderbox').hidden = true; $('stand').textContent = '';
+}
+async function load(){
+  $('reload').disabled = true;
+  try{
+    const r = await fetch(API, {method:'POST', headers:{apikey:KEY, Authorization:'Bearer ' + KEY, 'Content-Type':'application/json'}, body:'{}', cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    show(await r.json());
+  }catch(e){ console.error(e); fail(); }
+  $('reload').disabled = false;
+}
+async function order(ev){
+  ev.preventDefault();
+  const msg = $('orderMsg'), who = $('who').value.trim(), qty = Math.floor(Number($('qty').value));
+  const say = (t, ok) => { msg.textContent = t; msg.className = 'msg ' + (ok ? 'ok' : 'bad'); };
+  if(who.length < 2){ say('Bitte gib deine Familie an.', false); $('who').focus(); return; }
+  if(!(qty >= 1)){ say('Bitte gib an, wie viele Eier du möchtest.', false); $('qty').focus(); return; }
+  $('send').disabled = true; say('Einen Moment …', true);
+  try{
+    const r = await fetch(API.replace('neighbor_info', 'place_egg_order'), {method:'POST', headers:{apikey:KEY, Authorization:'Bearer ' + KEY, 'Content-Type':'application/json'},
+      body: JSON.stringify({p_buyer: who, p_qty: qty, p_hp: $('hp').value}), cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const res = await r.json();
+    if(res && res.ok){
+      store.set(who); say('', true);
+      $('thanksTitle').textContent = 'Danke, ' + who + '!';
+      const duty = last.duty ? (/^familie\s/i.test(last.duty) ? last.duty : 'Familie ' + last.duty) : 'der Familie mit Dienst';
+      $('thanksText').textContent = qty + (qty === 1 ? ' Ei ist' : ' Eier sind') + ' für dich zurückgelegt. Du kannst sie bei ' + duty + ' abholen.';
+      $('thanks').hidden = false; $('thanks').scrollIntoView({behavior:'smooth', block:'center'});
+      await load();
+    } else {
+      say((res && res.message) || 'Das hat leider nicht geklappt. Bitte versuche es noch einmal.', false);
+      await load();
+    }
+  }catch(e){ console.error(e); say('Die Bestellung konnte gerade nicht gesendet werden. Bitte versuche es gleich noch einmal.', false); }
+  $('send').disabled = false;
+}
+$('orderform').addEventListener('submit', order);
+$('who').value = store.get();
+$('reload').addEventListener('click', load);
+document.addEventListener('visibilitychange', () => { if(!document.hidden) load(); });
+setInterval(() => { if(!document.hidden) load(); }, 60000);
+load();
+</script>
+</body>
+</html>
