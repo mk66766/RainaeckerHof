@@ -108,7 +108,9 @@ async function sendReminders(d: Deps, cfg: Record<string, string>, site: string,
   for (const r of [pr, mem, fam, sw, tx, ck]) if (r.error) return json({ error: "Daten nicht lesbar" }, 500);
   const parents = tx.data || [];
   const kids = parents.length ? (await a.from("transactions").select("id,project_id,date,amount,pay_state,seller_id,parent_id").in("parent_id", parents.map((t: any) => t.id))).data || [] : [];
-  const items = buildReminders({ projects: pr.data || [], members: mem.data || [], families: fam.data || [], swaps: sw.data || [], tx: [...parents, ...kids], checks: ck.data || [] }, now);
+  // sonntags die Eier der Woche für den Wochenrückblick
+  const eggs = now.weekday === 0 ? (await a.from("egg_log").select("project_id,date,type,n,price").gte("date", new Date(Date.parse(now.date + "T12:00:00Z") - 6 * 864e5).toISOString().slice(0, 10)).lte("date", now.date)).data || [] : [];
+  const items = buildReminders({ projects: pr.data || [], members: mem.data || [], families: fam.data || [], swaps: sw.data || [], tx: [...parents, ...kids], checks: ck.data || [], eggs }, now);
   const msgs = mergePerUser(items);
   if (!msgs.length) return json({ users: 0, sent: 0, gone: 0, failed: 0 });
   const { data: subs, error } = await a.from("push_subscriptions").select("id,user_id,endpoint,p256dh,auth").in("user_id", msgs.map((m) => m.userId)).eq("reminders", true);

@@ -49,6 +49,15 @@ eq(it[0].text, "1 PayPal-Eingang (4,00 €) ist noch nicht bestätigt (Hühner).
 eq(buildReminders(base({ tx: [chk(4)] }), tue).length, 0, "Tag 4: Pause");
 eq(buildReminders(base({ tx: [chk(6), chk(3, "pq")] }), tue)[0].text, "2 PayPal-Eingänge (8,00 €) sind noch nicht bestätigt (Hühner).", "Text Mehrzahl mit Summe");
 
+// --- Wochenrückblick (sonntags, an alle Familien der Hühner)
+const eg = (date: string, type: string, n: number, price: number | null = null) => ({ project_id: "h", date, type, n, price });
+it = buildReminders(base({ swaps: [], eggs: [eg("2026-10-19", "laid", 30), eg("2026-10-25", "laid", 12), eg("2026-10-18", "laid", 99), eg("2026-10-20", "take", 20), eg("2026-10-21", "sale", 8, 0.4), eg("2026-10-22", "zusatz", 2, 0.2)] }), sun);
+eq(it.map((i) => i.userId).sort(), ["uA", "uB", "uC"], "Wochenrückblick an alle drei Hühner-Familien");
+eq(it[0].text, "Diese Woche: 42 Eier gelegt, 20 an Familien, 8 verkauft, 2 Zusatz-Eier, 3,60 € eingenommen.", "Wochenrückblick-Text (Vorwoche zählt nicht mit)");
+eq(buildReminders(base({ swaps: [], eggs: [] }), sun).length, 0, "keine Eier gelegt: kein Wochenrückblick");
+eq(buildReminders(base({ swaps: [], eggs: [eg("2026-10-20", "laid", 5)] }), tue).length, 0, "nicht sonntags: kein Wochenrückblick");
+eq(buildReminders(base({ swaps: [], eggs: [eg("2026-10-20", "laid", 5)] }), sun)[0].text, "Diese Woche: 5 Eier gelegt.", "nur gelegt: kurzer Text");
+
 // --- Monatsabschluss
 const m1 = { date: "2026-11-01", weekday: 0, day: 1 };
 const monthly = (d: Data) => buildReminders(d, { date: "2026-11-01", weekday: 3, day: 1 }).map((i) => i.userId + ":" + i.text);
@@ -78,6 +87,8 @@ function admin(db: Record<string, Row[]>) {
       select: () => q, order: () => q, maybeSingle: async () => ({ data: rows[0] ?? null, error: null }),
       eq: (c: string, v: any) => { rows = rows.filter((r) => r[c] === v); return q; },
       in: (c: string, vs: any[]) => { rows = rows.filter((r) => vs.includes(r[c])); return q; },
+      gte: (c: string, v: any) => { rows = rows.filter((r) => r[c] >= v); return q; },
+      lte: (c: string, v: any) => { rows = rows.filter((r) => r[c] <= v); return q; },
       delete: () => ({ eq: async (_c: string, v: string) => { deleted.push(v); return { error: null }; } }),
       then: (res: any) => res({ data: rows, error: null }),
     };
@@ -121,6 +132,8 @@ x = await run({ ...db(), push_subscriptions: [] }, post({ reminders: true }));
 eq([x.j.users, x.j.sent], [2, 0], "keine Geräte angemeldet: kein Fehler");
 x = await run({ ...db(), transactions: [], duty_swaps: [] }, post({ reminders: true }));
 eq([x.j.users, x.j.sent], [0, 0], "nichts zu erinnern: nichts gesendet");
+x = await run({ ...db(), transactions: [], duty_swaps: [], egg_log: [{ project_id: "h", date: "2026-10-24", type: "laid", n: 7, price: null }, { project_id: "h", date: "2026-10-17", type: "laid", n: 50, price: null }] }, post({ reminders: true }));
+eq([x.j.users, x.w.calls.find((c: any) => c.ep === "https://p/a").p.body], [3, "Diese Woche: 7 Eier gelegt."], "Sonntag: Wochenrückblick mit den Eiern dieser Woche an alle Familien");
 // Bestell-Nachricht funktioniert weiter
 const uidMap: Record<string, string> = { A: "uA", B: "uB", C: "uC" };
 x = await run({ ...db(), project_members: base().members.map((m) => ({ ...m, families: { user_id: uidMap[m.family_id] } })), egg_orders: [{ id: "o1", project_id: "h", buyer: "Meier", qty: 6, status: "offen" }] }, post({ order_id: "o1" }));

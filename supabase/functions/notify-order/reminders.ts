@@ -8,6 +8,7 @@ export type Data = {
   swaps: { project_id: string; week_start: string; family_id: string }[];
   tx: { id: string; project_id: string; date: string; amount: number | string; pay_state: string | null; seller_id: string | null; parent_id: string | null }[];
   checks: { project_id: string; created_at: string }[];
+  eggs?: { project_id: string; date: string; type: string; n: number; price: number | string | null }[];   // Eier der laufenden Woche (nur sonntags geladen)
 };
 export type Now = { date: string; weekday: number; day: number };       // Berlin: Datum JJJJ-MM-TT, Wochentag 0=Sonntag, Tag im Monat
 export type Item = { userId: string; title: string; text: string; url: string; prio: number };
@@ -23,6 +24,7 @@ export function buildReminders(d: Data, now: Now): Item[] {
   const uidOf = (famId: string | null) => d.families.find((f) => f.id === famId)?.user_id || null;
   const total = (t: Data["tx"][number]) => Number(t.amount) + d.tx.filter((x) => x.parent_id === t.id).reduce((s, x) => s + Number(x.amount), 0);
   const adminsOf = (pid: string) => d.members.filter((m) => m.project_id === pid && d.families.find((f) => f.id === m.family_id)?.is_admin).map((m) => uidOf(m.family_id)).filter(Boolean) as string[];
+  const membersOf = (pid: string) => d.members.filter((m) => m.project_id === pid).map((m) => uidOf(m.family_id)).filter(Boolean) as string[];
   const kindOf = (pid: string) => d.projects.find((p) => p.id === pid)?.kind || "hens";
 
   // 1) Dienst: sonntags für die nächste Woche
@@ -32,6 +34,24 @@ export function buildReminders(d: Data, now: Now): Item[] {
       const sw = d.swaps.find((s) => s.project_id === p.id && s.week_start === nextMon);
       const uid = sw && uidOf(sw.family_id);
       if (uid) items.push({ userId: uid, title: "Nächste Woche hast du Dienst", text: `${label(p)}: Ab morgen bist du dran.`, url: `#dienst:${p.kind}`, prio: 2 });
+    }
+  }
+
+  // 1b) Wochenrückblick: sonntags an alle Familien der Hühner (Woche Montag bis heute)
+  if (now.weekday === 0) {
+    const mon = addDays(now.date, -6);
+    for (const p of d.projects.filter((x) => x.kind === "hens")) {
+      const wk = (d.eggs || []).filter((e) => e.project_id === p.id && e.date >= mon && e.date <= now.date);
+      const n = (type: string) => wk.filter((e) => e.type === type).reduce((s, e) => s + Number(e.n), 0);
+      const laid = n("laid");
+      if (!laid) continue;
+      const money = wk.filter((e) => e.type === "sale" || e.type === "zusatz").reduce((s, e) => s + Number(e.n) * Number(e.price || 0), 0);
+      const parts = [`${laid} Eier gelegt`];
+      if (n("take")) parts.push(`${n("take")} an Familien`);
+      if (n("sale")) parts.push(`${n("sale")} verkauft`);
+      if (n("zusatz")) parts.push(`${n("zusatz")} Zusatz-Eier`);
+      const text = `Diese Woche: ${parts.join(", ")}${money > 0 ? `, ${eur(money)} eingenommen` : ""}.`;
+      for (const uid of membersOf(p.id)) items.push({ userId: uid, title: "Wochenrückblick", text, url: `#eier`, prio: 3 });
     }
   }
 

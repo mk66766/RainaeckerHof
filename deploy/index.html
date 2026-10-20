@@ -206,6 +206,8 @@ nav button[aria-current="page"]{color:var(--ink);background:color-mix(in srgb,va
 .seg button{flex:1;background:var(--bg);color:var(--ink);border:1.5px solid var(--line)}
 .seg button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .empty{color:var(--muted);text-align:center;padding:14px 0}
+.toast.undo{display:flex;align-items:center;gap:12px;padding:8px 8px 8px 16px;z-index:40;max-width:94vw}
+.toast.undo button{background:var(--yolk);color:var(--yolk-ink);border-radius:99px;padding:6px 14px;font-size:14px;font-weight:700;flex:none}
 .toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:99px;font-size:14px;z-index:20;max-width:90vw;text-align:center}
 .err{color:var(--bad);font-weight:600;margin:10px 0 0}
 @media (prefers-reduced-motion:reduce){.egg{transition:none}}
@@ -267,6 +269,14 @@ const members = () => P().members.map(id => S.fams.find(f => f.id === id)).filte
 const defFam = () => P().members.includes(S.me) ? S.me : P().members[0];
 const famOptions = sel => members().map(f => `<option value="${f.id}" ${f.id===(sel||defFam())?'selected':''}>${esc(f.name)}</option>`).join('');
 function toast(t){ const e=document.createElement('div'); e.className='toast'; e.textContent=t; document.body.appendChild(e); setTimeout(()=>e.remove(),2200); }
+// Meldung mit Knopf „Rückgängig“ (5 Sekunden), macht den letzten Schritt wieder rückgängig
+function toastUndo(t, undo){
+  document.querySelectorAll('.toast.undo').forEach(x => x.remove());
+  const e = document.createElement('div'); e.className = 'toast undo'; e.setAttribute('role', 'status');
+  e.innerHTML = `<span></span><button type="button">Rückgängig</button>`; e.firstChild.textContent = t;
+  e.querySelector('button').onclick = () => { e.remove(); closeSheet(); run(undo, 'Rückgängig gemacht'); };
+  document.body.appendChild(e); setTimeout(() => e.remove(), 5000);
+}
 const parseD = s => new Date(s + 'T12:00');
 const fmtDay = d => d.toLocaleDateString('de-DE',{day:'numeric',month:'short'});
 const fmtDate = s => parseD(s).toLocaleDateString('de-DE',{day:'numeric',month:'short',year:'numeric'});
@@ -525,6 +535,7 @@ function eggTap(btn){
 }
 async function addLaid(n, date, manual){
   if(!(await dutyCheck(date, n > 0 ? 'zählen' : 'korrigieren'))) return;
+  let undo = null;
   run(async () => {
     const p = P();
     if(n > 0){
@@ -533,10 +544,10 @@ async function addLaid(n, date, manual){
     } else if(n < 0){
       const rows = p.log.filter(l => l.type==='laid' && l.date===date).sort((x,y) => String(x.at||'').localeCompare(String(y.at||'')) || String(x.id).localeCompare(String(y.id)));
       const e = rows[rows.length-1]; if(!e) return;                    // neuester Eintrag des Tages
-      if(e.n > 1) await ok(await sb.from('egg_log').update({n:e.n-1}).eq('id', e.id));
-      else await ok(await sb.from('egg_log').delete().eq('id', e.id));
+      if(e.n > 1){ await ok(await sb.from('egg_log').update({n:e.n-1}).eq('id', e.id)); undo = async () => ok(await sb.from('egg_log').update({n:e.n}).eq('id', e.id)); }
+      else { await ok(await sb.from('egg_log').delete().eq('id', e.id)); undo = async () => ok(await sb.from('egg_log').insert({id:e.id, project_id:p.id, date:e.date, type:'laid', n:1, auto:e.auto !== false})); }
     }
-  });
+  }).then(done => { if(done && undo) toastUndo(`1 Ei weniger: ${laidOn(date)} gelegt`, undo); });
 }
 function vEier(){
   const p = P(), t = today(), n = laidOn(t), st = stock(), wkLaid = weekStats(monday(new Date())).laid, dutyF = dutyFam(monday(new Date()));
@@ -826,8 +837,9 @@ function sheetTake(fid, n){
 async function doTake(){
   const n=Math.floor(num(val('n'))); if(n<1) return;
   if(n>stock() && !(await ask(`Im Vorrat sind nur ${stock()} Eier. Möchtest du trotzdem ${n} eintragen?`, {title:'Nicht genug Eier im Vorrat', ok:'Trotzdem eintragen'}))) return;
-  const p = P(), f = val('f'); closeSheet();
-  run(async () => ok(await sb.from('egg_log').insert({project_id:p.id, date:today(), type:'take', n, family_id:f})), 'Eingetragen');
+  const p = P(), f = val('f'), id = uid(); closeSheet();
+  run(async () => ok(await sb.from('egg_log').insert({id, project_id:p.id, date:today(), type:'take', n, family_id:f})))
+    .then(done => { if(done) toastUndo(`${fam(f).name}: ${n} Ei${n===1?'':'er'} entnommen`, async () => ok(await sb.from('egg_log').delete().eq('id', id))); });
 }
 function sheetSale(oid){
   const o = oid ? (P().orders || []).find(x => x.id === oid) : null;
@@ -854,14 +866,20 @@ async function doSale(){
   if(n>stock() && !(await ask(`Im Vorrat sind nur ${stock()} Eier. Möchtest du trotzdem ${n} eintragen?`, {title:'Nicht genug Eier im Vorrat', ok:'Trotzdem eintragen'}))) return;
   if(!(await dutyCheck(today(), 'verkaufen'))) return;
   const svEl = document.getElementById('sv'), sellerId = (svEl && val('sv')) || S.me || null;
-  const p = P(), buyer = val('b').trim(), txId = uid(), oid = saleFor; saleFor = null; closeSheet();
+  const p = P(), buyer = val('b').trim(), txId = uid(), eggId = uid(), oid = saleFor; saleFor = null; closeSheet();
   run(async () => {
     await ok(await sb.from('transactions').insert({id:txId, project_id:p.id, date:today(), kind:'einnahme', amount:expected, description:`${n} Eier an ${buyer||'Nachbar'}`, family_id:null, seller_id:sellerId, pay_method:method, pay_state: method === 'bar' ? 'bar_offen' : 'pruefen'}));
-    await ok(await sb.from('egg_log').insert({project_id:p.id, date:today(), type:'sale', n, price:pr, buyer:buyer||null, family_id:null, tx_id:txId}));
+    await ok(await sb.from('egg_log').insert({id:eggId, project_id:p.id, date:today(), type:'sale', n, price:pr, buyer:buyer||null, family_id:null, tx_id:txId}));
     if(tip > 0) await ok(await sb.from('transactions').insert({project_id:p.id, date:today(), kind:'einnahme', amount:tip, description:`Trinkgeld ${buyer||'Nachbar'}`, family_id:null, parent_id:txId}));
     if(oid) await ok(await sb.from('egg_orders').update({status:'erledigt', handled_at:new Date().toISOString(), handled_by:S.user.id}).eq('id', oid));
   }, tip > 0 ? `${eur(expected+tip)} in die Gemeinschaftskasse, davon ${eur(tip)} Trinkgeld` : `${eur(expected)} in die Gemeinschaftskasse`).then(done => {
-    if(done) offerPayPal({amount: method === 'bar' ? Math.round((expected+tip)*100)/100 : expected, buyer, purpose: `${n} Ei${n===1?'':'er'}`, mode: 'sale', txId, method});
+    if(!done) return;
+    offerPayPal({amount: method === 'bar' ? Math.round((expected+tip)*100)/100 : expected, buyer, purpose: `${n} Ei${n===1?'':'er'}`, mode: 'sale', txId, method});
+    toastUndo(`${n} Ei${n===1?'':'er'} an ${buyer || 'Nachbar'} verkauft`, async () => {
+      await ok(await sb.from('egg_log').delete().eq('id', eggId));
+      await ok(await sb.from('transactions').delete().eq('id', txId));            // Trinkgeld hängt am Verkauf und geht mit
+      if(oid) await ok(await sb.from('egg_orders').update({status:'offen', handled_at:null, handled_by:null}).eq('id', oid));
+    });
   });
 }
 function sheetLaid(d0){
@@ -1042,7 +1060,7 @@ function doAnimal(id){
     }
     if(id) await ok(await sb.from('animals').update(rec).eq('id', id));
     else await ok(await sb.from('animals').insert({id:animalId, project_id:p.id, ...rec}));
-  }, 'Gespeichert');
+  }, id ? `${name}: Steckbrief gespeichert` : `${name} ist jetzt dabei`);
 }
 function showPhoto(id){
   const a = P().animals.find(x => x.id === id); if(!a || !a.photoUrl) return;
@@ -1097,7 +1115,7 @@ function doHealth(){
   run(async () => {
     await ok(await sb.from('health_entries').update({done:true}).eq('project_id',p.id).eq('type',type).eq('animal',animal).eq('done',false).not('next_due','is',null));
     await ok(await sb.from('health_entries').insert({project_id:p.id, type, animal, date, next_due:next, note, family_id:f}));
-  }, 'Gespeichert');
+  }, `${type} (${animal}) gespeichert${next ? `, nächstes Mal ${fmtDay(parseD(next))}` : ''}`);
 }
 function doneHealth(id){ run(async () => ok(await sb.from('health_entries').update({done:true}).eq('id', id))); }
 async function delHealth(id){ if(!(await ask('Der Gesundheits-Eintrag wird gelöscht.', {title:'Eintrag löschen?', ok:'Löschen', danger:true}))) return; run(async () => ok(await sb.from('health_entries').delete().eq('id', id))); }
@@ -1525,7 +1543,7 @@ function doPayCapture(id, state){
   const upd = {pay_method: state === 'bar_offen' ? 'bar' : 'paypal', pay_state: state, seller_id: f ? f.id : null};
   if(state === 'bestaetigt'){ upd.confirmed_at = new Date().toISOString(); upd.confirmed_by = S.user.id; }
   closeSheet();
-  run(async () => ok(await sb.from('transactions').update(upd).eq('id', id)), 'Gespeichert');
+  run(async () => ok(await sb.from('transactions').update(upd).eq('id', id)), `Zahlungsstand: ${{bar_offen:'Bargeld offen', pruefen:'Eingang prüfen', bestaetigt:'bestätigt'}[state]}`);
 }
 
 /* Kassenabgleich: echter PayPal-Kontostand gegen den Bestand der Gemeinschaftskasse */
@@ -2073,7 +2091,7 @@ function saveSetting(patch){
   run(async () => {
     const settings = {...proj.settings, ...patch};
     await ok(await sb.from('projects').update({settings}).eq('id', proj.id));
-  }, 'Gespeichert');
+  }, `Gespeichert: ${Object.keys(patch).map(k => SLABEL[k] || k).join(', ')}`);
 }
 /* ---- Änderungsprotokoll ---- */
 let audit = {rows:[], done:false, open:false};
@@ -2211,7 +2229,7 @@ function manualCard(){
       manDet('push', 'Benachrichtigungen aufs Handy', `<ul>
         <li>Im Tab <b>Hof</b> tippst du bei „Benachrichtigungen“ auf <b>Benachrichtigungen einschalten</b> und erlaubst die Nachrichten. Danach bekommst du eine Nachricht aufs Handy, sobald ein Nachbar Eier bestellt. Ein Tipp darauf öffnet die App bei den Bestellungen.</li>
         <li>Jede Familie schaltet das auf ihrem <b>eigenen Handy</b> ein. Mit <b>Test senden</b> prüfst du, ob es ankommt, und mit <b>Ausschalten</b> hörst du wieder auf.</li>
-        <li><b>Erinnerungen:</b> Um 18 Uhr schickt der Hof eine Nachricht, wenn etwas ansteht: am Sonntag „Nächste Woche hast du Dienst“, dazu Bargeld, das seit einer Woche nicht eingezahlt ist, PayPal-Eingänge, die seit drei Tagen auf Bestätigung warten, und am 1. des Monats (nur an den Admin) Abgleich und Sicherung. Ein Tipp auf die Nachricht öffnet die passende Seite. In der Karte „Benachrichtigungen“ schaltest du die Erinnerungen auf diesem Gerät mit <b>Ausschalten</b> ab, die Bestell-Nachrichten bleiben davon unberührt.</li>
+        <li><b>Erinnerungen:</b> Um 18 Uhr schickt der Hof eine Nachricht, wenn etwas ansteht: am Sonntag „Nächste Woche hast du Dienst“, dazu Bargeld, das seit einer Woche nicht eingezahlt ist, PayPal-Eingänge, die seit drei Tagen auf Bestätigung warten, am 1. des Monats (nur an den Admin) Abgleich und Sicherung, und sonntags ein kurzer Wochenrückblick (gelegt, an Familien, verkauft, eingenommen). Ein Tipp auf die Nachricht öffnet die passende Seite. In der Karte „Benachrichtigungen“ schaltest du die Erinnerungen auf diesem Gerät mit <b>Ausschalten</b> ab, die Bestell-Nachrichten bleiben davon unberührt.</li>
         <li><b>iPhone:</b> Das geht nur ab iOS 16.4 und nur, wenn die App auf dem Home-Bildschirm liegt (Teilen-Symbol, „Zum Home-Bildschirm“). Öffne die App dann von dort.</li>
         <li>Nach dem <b>Abmelden</b> kommen auf diesem Handy keine Nachrichten mehr. Beim nächsten Anmelden mit derselben Familie sind sie wieder aktiv.</li></ul>`),
       manDet('anspruch', 'Wochenanspruch, Entnehmen und Verzichten', `<ul>
