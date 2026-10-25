@@ -1,8 +1,10 @@
 // Edge Function „notify-order“: verschickt Push-Nachrichten.
-// Zwei Wege:
+// Wege:
 //  1) Datenbank-Auslöser bei neuer Bestellung: Header x-hook-secret + {order_id}
-//  2) Test aus der App: angemeldeter Nutzer (JWT), Body {test:true}
-import { berlinNow, buildReminders, mergePerUser } from "./reminders.ts";
+//  2) Zeitplan der Datenbank: Header x-hook-secret + {reminders:true}
+//  3) Test aus der App: angemeldeter Nutzer (JWT), Body {test:true}
+//  4) Admin-Tab: angemeldeter Admin (JWT), Body {admin:"message"|"notice"|"preview", ...}
+import { berlinNow, buildReminders, mergePerUser, type Now } from "./reminders.ts";
 export type Deps = {
   admin: any;                                   // Supabase-Client mit Service-Schlüssel
   webpush: { setVapidDetails: (s: string, pub: string, priv: string) => void; sendNotification: (sub: any, payload: string, opts?: any) => Promise<any> };
@@ -40,7 +42,7 @@ export function makeHandler(d: Deps) {
     try { body = await req.json(); } catch { /* leerer Body */ }
 
     let userIds: string[] = [];
-    let payload: { title: string; body: string; url: string; tag: string };
+    let payload: Payload;
     const hook = req.headers.get("x-hook-secret");
 
     if (hook !== null) {
@@ -64,31 +66,43 @@ export function makeHandler(d: Deps) {
       if (ue || !u?.user) return json({ error: "nicht angemeldet" }, 401);
       userIds = [u.user.id];
       payload = { title: "Test erfolgreich", body: "So sehen Benachrichtigungen vom Rainäcker Hof aus.", url: `${site}/`, tag: "test" };
+    } else if (typeof body?.admin === "string") {
+      return await adminAction(d, cfg, site, req, body);
     } else {
       return json({ error: "nicht erlaubt" }, 401);
     }
 
-    if (!userIds.length) return json({ total: 0, sent: 0, gone: 0, failed: 0 });
-    const { data: subs, error: subErr } = await d.admin.from("push_subscriptions").select("id,endpoint,p256dh,auth").in("user_id", userIds);
-    if (subErr) return json({ error: "Geräte nicht lesbar" }, 500);
-    if (!subs?.length) return json({ total: 0, sent: 0, gone: 0, failed: 0 });
-
-    d.webpush.setVapidDetails(site, cfg.vapid_public, cfg.vapid_private);
-    const text = JSON.stringify(payload);
-    let sent = 0, gone = 0, failed = 0;
-    await Promise.all(subs.map(async (s: any) => {
-      try {
-        await d.webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, text, { TTL: 86400, urgency: "high" });
-        sent++;
-      } catch (e: any) {
-        if (e?.statusCode === 404 || e?.statusCode === 410) {          // Gerät hat sich abgemeldet
-          await d.admin.from("push_subscriptions").delete().eq("id", s.id);
-          gone++;
-        } else { failed++; }
-      }
-    }));
-    return json({ total: subs.length, sent, gone, failed });
+    try { return json(await sendTo(d, cfg, site, userIds, () => payload, { TTL: 86400, urgency: "high" })); }
+    catch (e: any) { return json({ error: e?.message || "Fehler" }, 500); }
   };
+}
+
+type Payload = { title: string; body: string; url: string; tag: string };
+// Push an alle Geräte der genannten Nutzer; abgemeldete Geräte (404/410) werden gelöscht
+async function sendTo(d: Deps, cfg: Record<string, string>, site: string, userIds: string[], payloadFor: (userId: string) => Payload | null, opts: any, onlyReminders = false) {
+  const res = { total: 0, sent: 0, gone: 0, failed: 0 };
+  if (!userIds.length) return res;
+  let q = d.admin.from("push_subscriptions").select("id,user_id,endpoint,p256dh,auth").in("user_id", userIds);
+  if (onlyReminders) q = q.eq("reminders", true);
+  const { data: subs, error } = await q;
+  if (error) throw new Error("Geräte nicht lesbar");
+  if (!subs?.length) return res;
+  d.webpush.setVapidDetails(site, cfg.vapid_public, cfg.vapid_private);
+  res.total = subs.length;
+  await Promise.all(subs.map(async (s: any) => {
+    const p = payloadFor(s.user_id);
+    if (!p) return;
+    try {
+      await d.webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(p), opts);
+      res.sent++;
+    } catch (e: any) {
+      if (e?.statusCode === 404 || e?.statusCode === 410) {          // Gerät hat sich abgemeldet
+        await d.admin.from("push_subscriptions").delete().eq("id", s.id);
+        res.gone++;
+      } else { res.failed++; }
+    }
+  }));
+  return res;
 }
 
 // Erinnerungen: wird stündlich vom Zeitplan der Datenbank gerufen und handelt nur zur eingestellten Uhrzeit (Standard 18 Uhr Berlin)
@@ -96,6 +110,28 @@ async function sendReminders(d: Deps, cfg: Record<string, string>, site: string,
   const now = berlinNow(d.now ? d.now() : new Date());
   const hour = Number(cfg.reminder_hour ?? 18);
   if (!force && now.hour !== hour) return json({ skipped: "nicht die Erinnerungsstunde", hour: now.hour });
+  try {
+    const msgs = await collectReminders(d, now);
+    const res = { users: msgs.length, ...(await sendTo(d, cfg, site, msgs.map((m) => m.userId), (uid) => {
+      const m = msgs.find((x) => x.userId === uid)!;
+      return { title: m.title, body: m.body, url: `${site}/${m.url}`, tag: "erinnerung" };
+    }, { TTL: 43200, urgency: "normal" }, true)) };
+    delete (res as any).total;
+    await logRun(d, "lauf", { ...res, force });
+    return json(res);
+  } catch (e: any) {
+    await logRun(d, "fehler", { error: String(e?.message || e), force });
+    return json({ error: e?.message || "Fehler" }, 500);
+  }
+}
+
+// Protokoll für den Admin-Tab (Tabelle reminder_runs); ein Fehler beim Protokollieren stoppt nichts
+async function logRun(d: Deps, kind: string, result: unknown) {
+  try { await d.admin.from("reminder_runs").insert({ kind, result }); } catch { /* egal */ }
+}
+
+// Erinnerungen berechnen (ohne Versand), auch für die Vorschau im Admin-Tab
+async function collectReminders(d: Deps, now: Now) {
   const a = d.admin;
   const [pr, mem, fam, sw, tx, ck] = await Promise.all([
     a.from("projects").select("id,kind,name,settings"),
@@ -105,26 +141,58 @@ async function sendReminders(d: Deps, cfg: Record<string, string>, site: string,
     a.from("transactions").select("id,project_id,date,amount,pay_state,seller_id,parent_id").in("pay_state", ["bar_offen", "pruefen"]),
     a.from("cash_checks").select("project_id,created_at").order("created_at", { ascending: false }),
   ]);
-  for (const r of [pr, mem, fam, sw, tx, ck]) if (r.error) return json({ error: "Daten nicht lesbar" }, 500);
+  for (const r of [pr, mem, fam, sw, tx, ck]) if (r.error) throw new Error("Daten nicht lesbar");
   const parents = tx.data || [];
   const kids = parents.length ? (await a.from("transactions").select("id,project_id,date,amount,pay_state,seller_id,parent_id").in("parent_id", parents.map((t: any) => t.id))).data || [] : [];
   // sonntags die Eier der Woche für den Wochenrückblick
   const eggs = now.weekday === 0 ? (await a.from("egg_log").select("project_id,date,type,n,price").gte("date", new Date(Date.parse(now.date + "T12:00:00Z") - 6 * 864e5).toISOString().slice(0, 10)).lte("date", now.date)).data || [] : [];
   const items = buildReminders({ projects: pr.data || [], members: mem.data || [], families: fam.data || [], swaps: sw.data || [], tx: [...parents, ...kids], checks: ck.data || [], eggs }, now);
   const msgs = mergePerUser(items);
-  if (!msgs.length) return json({ users: 0, sent: 0, gone: 0, failed: 0 });
-  const { data: subs, error } = await a.from("push_subscriptions").select("id,user_id,endpoint,p256dh,auth").in("user_id", msgs.map((m) => m.userId)).eq("reminders", true);
-  if (error) return json({ error: "Geräte nicht lesbar" }, 500);
-  d.webpush.setVapidDetails(site, cfg.vapid_public, cfg.vapid_private);
-  let sent = 0, gone = 0, failed = 0;
-  await Promise.all((subs || []).map(async (s: any) => {
-    const m = msgs.find((x) => x.userId === s.user_id)!;
-    try {
-      await d.webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify({ title: m.title, body: m.body, url: `${site}/${m.url}`, tag: "erinnerung" }), { TTL: 43200, urgency: "normal" });
-      sent++;
-    } catch (e: any) {
-      if (e?.statusCode === 404 || e?.statusCode === 410) { await a.from("push_subscriptions").delete().eq("id", s.id); gone++; } else failed++;
+  return msgs.map((m) => ({ ...m, name: (fam.data || []).find((f: any) => f.user_id === m.userId)?.name || "?" }));
+}
+
+// Aktionen aus dem Admin-Tab (nur angemeldete Admins)
+async function adminAction(d: Deps, cfg: Record<string, string>, site: string, req: Request, body: any): Promise<Response> {
+  const a = d.admin;
+  const jwt = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  const { data: u, error: ue } = jwt ? await a.auth.getUser(jwt) : { data: null, error: true };
+  if (ue || !u?.user) return json({ error: "nicht angemeldet" }, 401);
+  const { data: fams, error: fe } = await a.from("families").select("id,name,user_id,is_admin,left_on");
+  if (fe) return json({ error: "Daten nicht lesbar" }, 500);
+  const me = (fams || []).find((f: any) => f.user_id === u.user.id);
+  if (!me || !me.is_admin || me.left_on) return json({ error: "nur für den Admin" }, 403);
+  try {
+    if (body.admin === "message") {                 // freie Nachricht an eine Familie (z. B. um Push zu testen)
+      const t = (fams || []).find((f: any) => f.id === body.family_id && !f.left_on);
+      if (!t?.user_id) return json({ error: "Familie nicht gefunden" }, 404);
+      const text = String(body.text || "").trim().slice(0, 300);
+      if (!text) return json({ error: "Bitte einen Text eingeben" }, 400);
+      return json(await sendTo(d, cfg, site, [t.user_id], () => ({ title: "Nachricht vom Admin", body: text, url: `${site}/`, tag: "admin-nachricht" }), { TTL: 86400, urgency: "high" }));
     }
-  }));
-  return json({ users: msgs.length, sent, gone, failed });
+    if (body.admin === "notice") {                  // Hinweis an alle Familien eines Projekts (Text steht in settings.notice)
+      const { data: p } = await a.from("projects").select("id,kind,settings").eq("id", body.project_id).maybeSingle();
+      const text = String(p?.settings?.notice?.text || "").trim();
+      if (!p || !text) return json({ error: "Kein Hinweis gespeichert" }, 400);
+      const { data: mem } = await a.from("project_members").select("family_id").eq("project_id", p.id);
+      const uids = (mem || []).map((m: any) => (fams || []).find((f: any) => f.id === m.family_id && !f.left_on)?.user_id).filter(Boolean);
+      return json(await sendTo(d, cfg, site, uids, () => ({ title: `Hinweis (${p.kind === "goats" ? "Ziegen" : "Hühner"})`, body: text.slice(0, 300), url: `${site}/#hinweis:${p.kind}`, tag: `hinweis-${p.id}` }), { TTL: 86400, urgency: "normal" }));
+    }
+    if (body.admin === "preview") {                 // Vorschau der Erinnerungen für einen Tag, auf Wunsch nur an den Admin senden
+      const date = /^\d{4}-\d\d-\d\d$/.test(String(body.date || "")) ? String(body.date) : berlinNow(d.now ? d.now() : new Date()).date;
+      const dt = new Date(date + "T12:00:00Z");
+      const now: Now = { date, weekday: dt.getUTCDay(), day: dt.getUTCDate() };
+      const msgs = await collectReminders(d, now);
+      const out: any = { date, messages: msgs.map((m) => ({ name: m.name, title: m.title, body: m.body })) };
+      if (body.send === true && msgs.length) {
+        let i = 0;
+        const all = await Promise.all(msgs.map((m) => sendTo(d, cfg, site, [u.user.id], () => ({ title: `Vorschau für ${m.name}: ${m.title}`, body: m.body, url: `${site}/${m.url}`, tag: `vorschau-${i++}` }), { TTL: 3600, urgency: "normal" })));
+        out.sent = all.reduce((s, r) => s + r.sent, 0);
+        out.total = all.length ? all[0].total : 0;
+      }
+      return json(out);
+    }
+  } catch (e: any) {
+    return json({ error: e?.message || "Fehler" }, 500);
+  }
+  return json({ error: "Unbekannte Aktion" }, 400);
 }

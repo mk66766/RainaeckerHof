@@ -83,7 +83,7 @@ export function buildReminders(d: Data, now: Now): Item[] {
       const last = d.checks.filter((c) => c.project_id === p.id).map((c) => c.created_at.slice(0, 10)).sort().pop();
       if (!last || ageDays(last, now.date) > 28) lines.push(`Kassenabgleich (${label(p)}): Zeit für den monatlichen Abgleich.`);
       const bk = p.settings?.last_backup as string | undefined;
-      if (!bk || ageDays(bk, now.date) > 28) lines.push(`Sicherung (${label(p)}): Zeit, die Daten zu sichern (Tab Hof).`);
+      if (!bk || ageDays(bk, now.date) > 28) lines.push(`Sicherung (${label(p)}): Zeit, die Daten zu sichern (Tab Admin).`);
       for (const uid of adminsOf(p.id)) for (const text of lines) items.push({ userId: uid, title: "Monatsabschluss", text, url: `#kasse:${p.kind}`, prio: 3 });
     }
   }
