@@ -110,18 +110,20 @@ button:disabled{opacity:.5;cursor:default}
 
   <section class="card thanks" id="thanks" hidden aria-live="polite"><strong id="thanksTitle"></strong><p class="hint" id="thanksText" style="font-size:16px;color:inherit"></p></section>
 
+  <section class="card" id="mine" hidden><h2><span class="hi" aria-hidden="true">📋</span>Deine Bestellungen</h2><div id="mineList"></div></section>
+
   <section class="card" id="orderbox" hidden>
     <h2><span class="hi" aria-hidden="true">🛒</span>Eier bestellen</h2>
     <form id="orderform" novalidate>
       <label for="who">Familie</label>
       <input id="who" type="text" maxlength="80" autocomplete="name" required>
       <label for="qty">Anzahl Eier</label>
-      <div class="step"><button type="button" onclick="stepQty(-1)" aria-label="weniger">−</button><input id="qty" type="number" inputmode="numeric" min="1" max="100" required><button type="button" onclick="stepQty(1)" aria-label="mehr">+</button></div>
+      <div class="step"><button type="button" onclick="stepQty(-1)" aria-label="weniger">−</button><input id="qty" type="number" inputmode="numeric" min="1" max="30" required><button type="button" onclick="stepQty(1)" aria-label="mehr">+</button></div>
       <div class="hp" aria-hidden="true"><label for="hp">Bitte leer lassen</label><input id="hp" type="text" tabindex="-1" autocomplete="off"></div>
       <button class="yolk" id="send" type="submit">Bestellen</button>
       <p class="msg" id="orderMsg" role="status"></p>
     </form>
-    <p class="hint">Deine Eier werden für dich zurückgelegt. Du holst sie bei der Familie ab, die oben steht.</p>
+    <p class="hint" id="orderHint">Deine Eier werden für dich zurückgelegt. Du holst sie bei der Familie ab, die oben steht.</p>
   </section>
 
   <button id="reload" class="alt" type="button">↻ Aktualisieren</button>
@@ -134,7 +136,9 @@ const API = 'https://ubboukewvvrriraxfuzn.supabase.co/rest/v1/rpc/neighbor_info'
 const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViYm91a2V3dnZycmlyYXhmdXpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxMzI0MjIsImV4cCI6MjEwNzcwODQyMn0.iNEwD9cybcurN-TLWdsVsjV5KrjfHYW0AMIDgt61r1s';
 const $ = id => document.getElementById(id);
 let last = {n:0, duty:''};
-const NAME_KEY = 'hof-nachbar-name';
+const NAME_KEY = 'hof-nachbar-name', ORD_KEY = 'hof-nachbar-bestellungen';
+const myOrders = { get(){ try{ return JSON.parse(localStorage.getItem(ORD_KEY) || '[]').filter(x => x && x.id && Date.now() - x.t < 14 * 864e5); }catch(e){ return []; } },
+  set(list){ try{ localStorage.setItem(ORD_KEY, JSON.stringify(list.slice(-10))); }catch(e){} } };
 const store = { get(){ try{ return localStorage.getItem(NAME_KEY) || ''; }catch(e){ return ''; } }, set(v){ try{ localStorage.setItem(NAME_KEY, v); }catch(e){} } };
 function stepQty(d){ const q = $('qty'); q.value = Math.min(Number(q.max) || 100, Math.max(1, (parseInt(q.value) || 0) + d)); }
 const eur = n => Number(n).toLocaleString('de-DE', {style:'currency', currency:'EUR'});
@@ -150,9 +154,10 @@ function show(d){
   const duty = d.duty ? (/^familie\s/i.test(d.duty) ? d.duty : 'Familie ' + d.duty) : 'bitte kurz nachfragen';
   $('duty').textContent = duty;
   $('details').hidden = false;
-  const q = $('qty'); q.max = Math.max(1, n);
-  if(Number(q.value) > n && n > 0) q.value = n;
-  $('orderbox').hidden = n < 1;
+  $('orderbox').hidden = false;
+  $('orderHint').textContent = n > 0
+    ? 'Deine Eier werden für dich zurückgelegt. Du holst sie bei der Familie ab, die oben steht. Bestellst du mehr als frei ist, kommst du auf die Warteliste.'
+    : 'Gerade sind keine Eier frei. Du kannst trotzdem bestellen und kommst auf die Warteliste. Sobald Eier für dich da sind, steht das hier unter „Deine Bestellungen“. Nach 7 Tagen verfällt die Bestellung.';
   last = {n, duty};
   const note = (d.note || '').trim();
   $('notebox').hidden = !note; $('note').textContent = note;
@@ -165,12 +170,30 @@ function fail(){
   $('state').classList.add('err');
   $('details').hidden = true; $('notebox').hidden = true; $('orderbox').hidden = true; $('stand').textContent = '';
 }
+// Stand der eigenen Bestellungen (nur die IDs, die dieses Gerät beim Bestellen bekommen hat)
+async function loadMine(){
+  const list = myOrders.get();
+  if(!list.length){ $('mine').hidden = true; return; }
+  try{
+    const r = await fetch(API.replace('neighbor_info', 'order_status'), {method:'POST', headers:{apikey:KEY, Authorization:'Bearer ' + KEY, 'Content-Type':'application/json'}, body: JSON.stringify({p_ids: list.map(x => x.id)}), cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const rows = await r.json();
+    if(!Array.isArray(rows) || !rows.length){ $('mine').hidden = true; return; }
+    const duty = last.duty ? (/^familie\s/i.test(last.duty) ? last.duty : 'Familie ' + last.duty) : 'der Familie mit Dienst';
+    const txt = o => o.status === 'bereit' ? 'liegt bereit, abholen bei ' + duty
+      : o.status === 'wartet' ? 'auf der Warteliste' + (o.pos ? ', Platz ' + o.pos : '')
+      : o.status === 'erledigt' ? 'abgeholt, danke!' : o.status === 'abgelehnt' ? 'leider abgelehnt' : 'verfallen (nach 7 Tagen)';
+    $('mineList').innerHTML = rows.map(o => `<div class="row"><span>${o.qty} ${o.qty === 1 ? 'Ei' : 'Eier'} · ${new Date(o.created).toLocaleDateString('de-DE', {day:'numeric', month:'short'})}</span><strong>${txt(o)}</strong></div>`).join('');
+    $('mine').hidden = false;
+  }catch(e){ console.error(e); }
+}
 async function load(){
   $('reload').disabled = true;
   try{
     const r = await fetch(API, {method:'POST', headers:{apikey:KEY, Authorization:'Bearer ' + KEY, 'Content-Type':'application/json'}, body:'{}', cache:'no-store'});
     if(!r.ok) throw new Error('HTTP ' + r.status);
     show(await r.json());
+    await loadMine();
   }catch(e){ console.error(e); fail(); }
   $('reload').disabled = false;
 }
@@ -188,9 +211,12 @@ async function order(ev){
     const res = await r.json();
     if(res && res.ok){
       store.set(who); say('', true);
+      if(res.id) myOrders.set([...myOrders.get(), {id: res.id, t: Date.now()}]);
       $('thanksTitle').textContent = 'Danke, ' + who + '!';
       const duty = last.duty ? (/^familie\s/i.test(last.duty) ? last.duty : 'Familie ' + last.duty) : 'der Familie mit Dienst';
-      $('thanksText').textContent = qty + (qty === 1 ? ' Ei ist' : ' Eier sind') + ' für dich zurückgelegt. Du kannst sie bei ' + duty + ' abholen.';
+      $('thanksText').textContent = res.waiting
+        ? 'Gerade sind nicht genug Eier frei. Du stehst auf Platz ' + (res.pos || 1) + ' der Warteliste. Sobald Eier für dich da sind, steht das hier unter „Deine Bestellungen“.'
+        : qty + (qty === 1 ? ' Ei ist' : ' Eier sind') + ' für dich zurückgelegt. Du kannst sie bei ' + duty + ' abholen.';
       $('thanks').hidden = false; $('thanks').scrollIntoView({behavior:'smooth', block:'center'});
       await load();
     } else {

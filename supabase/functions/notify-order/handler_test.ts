@@ -1,7 +1,7 @@
 import { makeHandler } from "./handler.ts";
 
 type Row = Record<string, any>;
-function fakeAdmin(db: { cfg?: Row[]; orders?: Row[]; members?: Row[]; subs?: Row[]; users?: Record<string, string>; cfgError?: boolean }) {
+function fakeAdmin(db: { cfg?: Row[]; orders?: Row[]; members?: Row[]; subs?: Row[]; users?: Record<string, string>; cfgError?: boolean; ready?: Row[] | null }) {
   const deleted: string[] = [];
   const from = (t: string) => {
     let rows: Row[] = t === "push_config" ? (db.cfg ?? []) : t === "egg_orders" ? (db.orders ?? []) : t === "project_members" ? (db.members ?? []) : (db.subs ?? []);
@@ -15,7 +15,8 @@ function fakeAdmin(db: { cfg?: Row[]; orders?: Row[]; members?: Row[]; subs?: Ro
     };
     return q;
   };
-  return { from, deleted, auth: { getUser: async (jwt: string) => db.users?.[jwt] ? { data: { user: { id: db.users[jwt] } }, error: null } : { data: null, error: { message: "bad" } } } };
+  const rpc = async (name: string) => name === "take_ready_orders" ? (db.ready === null ? { data: null, error: { message: "x" } } : { data: db.ready ?? [], error: null }) : { data: null, error: { message: "unbekannt" } };
+  return { from, rpc, deleted, auth: { getUser: async (jwt: string) => db.users?.[jwt] ? { data: { user: { id: db.users[jwt] } }, error: null } : { data: null, error: { message: "bad" } } } };
 }
 const CFG = [
   { key: "vapid_public", value: "PUB" }, { key: "vapid_private", value: "PRIV" },
@@ -38,7 +39,7 @@ const run = async (db: any, req: Request, w = wp()) => { const a = fakeAdmin(db)
 
 const base = {
   cfg: CFG,
-  orders: [{ id: "o1", project_id: "p1", buyer: "Familie Meier", qty: 6, status: "offen" }, { id: "o2", project_id: "p1", buyer: "Familie Huber", qty: 1, status: "offen" }],
+  orders: [{ id: "o1", project_id: "p1", buyer: "Familie Meier", qty: 6, status: "offen" }, { id: "o2", project_id: "p1", buyer: "Familie Huber", qty: 1, status: "offen" }, { id: "o3", project_id: "p1", buyer: "Volkert", qty: 6, status: "offen", waited: true }],
   members: [{ project_id: "p1", family_id: "fa", families: { user_id: "uA" } }, { project_id: "p1", family_id: "fb", families: { user_id: "uB" } }, { project_id: "p2", family_id: "fc", families: { user_id: "uC" } }],
   subs: [
     { id: "s1", user_id: "uA", endpoint: "https://push/a", p256dh: "k1", auth: "a1" },
@@ -89,4 +90,17 @@ x = await run({ ...base, cfgError: true }, post({ order_id: "o1" }, { "x-hook-se
 eq(x.r.status, 500, "Konfiguration nicht lesbar: 500");
 x = await run({ ...base, cfg: CFG.filter(r => r.key !== "hook_secret") }, post({ order_id: "o1" }, { "x-hook-secret": "" }));
 eq(x.r.status, 401, "kein Geheimnis konfiguriert: nie erlaubt");
+// Warteliste
+x = await run(base, post({ order_id: "o3" }, { "x-hook-secret": "geheim123" }));
+eq([x.j.sent, x.w.calls[0].payload], [3, { title: "Bestellung wartet", body: "Volkert möchte 6 Eier, gerade ist nichts frei. Hast du welche übrig?", url: "https://example.test/#bestellungen", tag: "bestellung-o3" }], "wartende Bestellung: an alle Familien mit der Frage nach übrigen Eiern");
+x = await run({ ...base, ready: [{ id: "o3", project_id: "p1", buyer: "Volkert", qty: 6, duty_user: "uB" }] }, post({ queue: true }, { "x-hook-secret": "geheim123" }));
+eq([x.j, x.w.calls.map((c: any) => c.sub.endpoint).sort(), x.w.calls[0].payload.title, x.w.calls[0].payload.body], [{ orders: 1, sent: 2 }, ["https://push/b", "https://push/b2"], "Bestellung kann raus", "Für Volkert sind jetzt 6 Eier frei."], "Warteliste: jetzt bereit, Nachricht an die Familie mit Dienst (beide Geräte)");
+x = await run({ ...base, ready: [{ id: "o2", project_id: "p1", buyer: "Familie Huber", qty: 1, duty_user: null }] }, post({ queue: true }, { "x-hook-secret": "geheim123" }));
+eq([x.j.sent, x.w.calls[0].payload.body], [3, "Für Familie Huber ist jetzt 1 Ei frei."], "ohne Dienst: an alle des Projekts");
+x = await run({ ...base, ready: [] }, post({ queue: true }, { "x-hook-secret": "geheim123" }));
+eq([x.j, x.w.calls.length], [{ orders: 0, sent: 0 }, 0], "nichts bereit: keine Nachricht");
+x = await run({ ...base, ready: null }, post({ queue: true }, { "x-hook-secret": "geheim123" }));
+eq(x.r.status, 500, "Warteliste nicht lesbar: 500");
+x = await run({ ...base, ready: [] }, post({ queue: true }));
+eq(x.r.status, 401, "Warteliste ohne Geheimnis: abgelehnt");
 console.log("\nalle Tests bestanden");

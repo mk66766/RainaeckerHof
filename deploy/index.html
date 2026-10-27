@@ -663,26 +663,88 @@ function statMonths(){
 
 /* ---- Wochen-Anspruch & Überschuss ---- */
 const quota = () => P().quota ?? 10;
-const openOrders = () => (P().orders || []).filter(o => o.status === 'offen');
+const ORDER_DAYS = 7;   // offene Bestellungen verfallen nach 7 Tagen (Datenbank setzt dann „verfallen“)
+const orderLive = o => o.status === 'offen' && Date.now() - new Date(o.created).getTime() < ORDER_DAYS * 864e5;
+const openOrders = () => (P().orders || []).filter(orderLive);
+// Warteliste wie app.order_queue(): älteste zuerst; passt eine Bestellung in den Rest des Überschusses, ist sie bereit, sonst wartet sie
+function orderQueue(){
+  let rest = availNow(), w = 0; const q = {};
+  [...openOrders()].sort((a,b) => String(a.created).localeCompare(String(b.created)) || String(a.id).localeCompare(String(b.id)))
+    .forEach(o => { if(o.qty <= rest){ rest -= o.qty; q[o.id] = {ready:true}; } else q[o.id] = {ready:false, pos:++w}; });
+  return {q, rest};
+}
 function whenText(iso){
   const d = new Date(iso);
   return d.toLocaleDateString('de-DE', {weekday:'short', day:'2-digit', month:'2-digit'}) + ', ' + d.toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'}) + ' Uhr';
 }
 let saleFor = null;
 function ordersCard(){
-  const all = P().orders || [], open = all.filter(o => o.status === 'offen');
-  const done = all.filter(o => o.status !== 'offen').slice(-8).reverse();
+  const all = P().orders || [], {q} = orderQueue();
+  const open = openOrders().sort((a,b) => (q[b.id].ready - q[a.id].ready) || ((q[a.id].pos||0) - (q[b.id].pos||0)) || String(a.created).localeCompare(String(b.created)));
+  const done = all.filter(o => !orderLive(o)).slice(-8).reverse();
   if(!all.length) return '';
   const eggs = n => `${n} Ei${n===1?'':'er'}`;
+  const DONE = {erledigt:'verkauft', abgelehnt:'abgelehnt', verfallen:'verfallen', offen:'verfallen'};
   return `
   <div class="card list" ${open.length?'style="border:2px solid var(--yolk)"':''}>
     <h2><span class="hi" aria-hidden="true">🛒</span>Bestellungen von Nachbarn</h2>
-    ${open.length ? open.map(o => `<div class="item"><div><strong>${esc(o.buyer)}</strong><div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div></div>
-      <div style="display:flex;align-items:center;gap:6px"><button class="yolk small" onclick="sheetSale('${o.id}')">Verkauft</button><button class="ghost" onclick="orderReject('${o.id}')" aria-label="Bestellung ablehnen">✕</button></div></div>`).join('')
+    ${open.length ? open.map(o => q[o.id].ready
+      ? `<div class="item"><div><strong>${esc(o.buyer)}</strong> <span class="pill">bereit</span><div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div></div>
+      <div style="display:flex;align-items:center;gap:6px"><button class="yolk small" onclick="sheetSale('${o.id}')">Verkauft</button><button class="ghost" onclick="orderReject('${o.id}')" aria-label="Bestellung ablehnen">✕</button></div></div>`
+      : `<div class="item" style="flex-direction:column;align-items:stretch;gap:8px"><div class="row"><div><strong>${esc(o.buyer)}</strong> <span class="muted">wartet · Platz ${q[o.id].pos}</span><div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div></div><button class="ghost" onclick="orderReject('${o.id}')" aria-label="Bestellung ablehnen">✕</button></div>
+      <button class="alt small" onclick="sheetGive('${o.id}')">Aus meinem Anspruch abgeben</button></div>`).join('')
       : '<div class="empty">Keine offenen Bestellungen.</div>'}
+    ${open.some(o => !q[o.id].ready) ? `<p class="muted" style="margin:8px 0 0">Wartende Bestellungen werden der Reihe nach bereit, sobald Überschuss da ist. Hat eine Familie Eier aus ihrem Anspruch übrig, kann sie sie mit <b>Aus meinem Anspruch abgeben</b> verkaufen. Nach ${ORDER_DAYS} Tagen verfällt eine Bestellung.</p>` : ''}
     ${done.length ? `<details style="margin-top:8px"><summary class="muted" style="cursor:pointer">Erledigt (${done.length})</summary>
-      ${done.map(o => `<div class="item"><div>${esc(o.buyer)}<div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div></div><div style="display:flex;align-items:center;gap:4px"><span class="muted">${o.status==='erledigt'?'verkauft':'abgelehnt'}</span><button class="ghost" onclick="orderDelete('${o.id}')" aria-label="Bestellung löschen">✕</button></div></div>`).join('')}</details>` : ''}
+      ${done.map(o => `<div class="item"><div>${esc(o.buyer)}<div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div></div><div style="display:flex;align-items:center;gap:4px"><span class="muted">${DONE[o.status]||o.status}</span><button class="ghost" onclick="orderDelete('${o.id}')" aria-label="Bestellung löschen">✕</button></div></div>`).join('')}</details>` : ''}
   </div>`;
+}
+/* Eine Familie gibt Eier aus ihrem Wochenanspruch an eine wartende Bestellung ab:
+   Verzicht um n erhöhen (Anspruch kleiner) und, wenn sie die Eier schon geholt hat, ihre Entnahme um n verringern.
+   Damit werden genau n Eier Überschuss; danach öffnet sich der normale Verkauf mit der Familie als Verkäufer. */
+let givePick = 'stall';
+function giveRoom(fid){
+  const w = weekStats(monday(new Date())), q = quota(), ent = q - (w.waived[fid]||0), t = w.taken[fid]||0;
+  return {ent, t, inStall: Math.max(0, ent - t)};
+}
+function setGive(m){ givePick = m; ['stall','geholt'].forEach(k => { const b = document.getElementById('gv-'+k); if(b) b.classList.toggle('on', k === m); }); }
+function sheetGive(oid, fid){
+  const o = (P().orders || []).find(x => x.id === oid); if(!o) return;
+  const f = fid || (members().some(m => m.id === S.me) ? S.me : (members()[0]||{}).id), r = giveRoom(f);
+  givePick = r.inStall >= o.qty ? 'stall' : 'geholt';
+  openSheet('Aus dem Anspruch abgeben', `<p class="muted" style="margin:0">${esc(o.buyer)} möchte ${o.qty} Ei${o.qty===1?'':'er'}. Die Eier gehen aus dem Wochenanspruch der Familie in den Verkauf, das Geld in die Gemeinschaftskasse.</p>
+    <label>Welche Familie gibt ab?</label><select id="gf" onchange="sheetGive('${oid}', this.value)">${famOptions(f)}</select>
+    <p class="muted" style="margin:6px 0 0">Diese Woche: ${r.t} von ${r.ent} genommen.</p>
+    <label>Anzahl</label>${stepper('gn', Math.min(o.qty, r.ent) || 1, 1, o.qty)}
+    <label>Wo sind die Eier?</label><div class="seg"><button id="gv-stall" onclick="setGive('stall')">Noch im Stall</button><button id="gv-geholt" onclick="setGive('geholt')">Schon bei uns</button></div>` + actions(`doGive('${oid}')`));
+  setGive(givePick);
+}
+async function doGive(oid){
+  const o = (P().orders || []).find(x => x.id === oid); if(!o) return;
+  const f = val('gf'), n = Math.floor(num(val('gn'))), r = giveRoom(f), mode = givePick;
+  if(n < 1) return;
+  if(n > r.ent){ await ask(`${fam(f).name} hat diese Woche nur noch Anspruch auf ${r.ent} Eier.`, {title:'Zu viele Eier', ok:'OK', cancel:false}); return; }
+  if(mode === 'stall' && n > r.inStall){ await ask(`Laut Eintrag hat ${fam(f).name} schon ${r.t} Eier geholt, im Stall liegen aus ihrem Anspruch nur noch ${r.inStall}. Wähle „Schon bei uns“ oder eine kleinere Anzahl.`, {title:'Nicht mehr im Stall', ok:'OK', cancel:false}); return; }
+  if(mode === 'geholt' && n > r.t){ await ask(`${fam(f).name} hat diese Woche erst ${r.t} Eier geholt.`, {title:'Noch nicht geholt', ok:'OK', cancel:false}); return; }
+  const p = P(), m = monday(new Date()), mon = ds(m), e = new Date(m); e.setDate(e.getDate()+6); const es = ds(e);
+  const oldW = p.log.filter(l => l.type === 'verzicht' && l.fam === f && l.date >= mon && l.date <= es);
+  const waived = Math.min(quota(), sum(oldW, l => l.n) + n);
+  const takes = p.log.filter(l => l.type === 'take' && l.fam === f && l.date >= mon && l.date <= es).sort((a,b) => b.date.localeCompare(a.date) || String(b.at||'').localeCompare(String(a.at||'')));
+  closeSheet();
+  const done = await run(async () => {
+    if(oldW.length) await ok(await sb.from('egg_log').delete().in('id', oldW.map(l => l.id)));
+    await ok(await sb.from('egg_log').insert({project_id:p.id, date:mon, type:'verzicht', n:waived, family_id:f}));
+    if(mode === 'geholt'){
+      let left = n;
+      for(const t of takes){
+        if(left <= 0) break;
+        const cut = Math.min(left, t.n); left -= cut;
+        if(cut === t.n) await ok(await sb.from('egg_log').delete().eq('id', t.id));
+        else await ok(await sb.from('egg_log').update({n: t.n - cut}).eq('id', t.id));
+      }
+    }
+  }, `${fam(f).name} gibt ${n} Ei${n===1?'':'er'} ab`);
+  if(done) sheetSale(oid, f, n);
 }
 async function orderDelete(id){
   const o = (P().orders || []).find(x => x.id === id); if(!o) return;
@@ -710,7 +772,7 @@ function weekNav(k){ weekOff = Math.min(0, weekOff + k); render(); }
 function weekCard(){
   const p = P(), q = quota(), m = monday(new Date()), w = weekStats(m);
   const sp = surplusParts(m), outstanding = sp.reserved, avail = sp.surplus;
-  const short = Math.max(0, w.total - w.laid), openQty = sum(openOrders(), o => o.qty);
+  const short = Math.max(0, w.total - w.laid), oq = orderQueue(), openQty = sum(openOrders().filter(o => oq.q[o.id].ready), o => o.qty), waitN = openOrders().length - openOrders().filter(o => oq.q[o.id].ready).length;
   return `
   <div class="card">
     <h2><span class="hi" aria-hidden="true">🥚</span>Vorrat &amp; Überschuss</h2>
@@ -721,6 +783,7 @@ function weekCard(){
     <p class="muted" style="margin:8px 0 0">Den Familien stehen diese Woche noch ${outstanding} Eier zu.${w.sold?` Diese Woche verkauft: ${w.sold}.`:''}</p>
     ${sp.carryLeft>0 ? `<p class="muted" style="margin:6px 0 0">Davon sind <b>${sp.carryLeft}</b> Eier aus der Vorwoche (Übertrag). Die bitte zuerst verkaufen.</p>` : ''}
     ${openQty>0 ? `<p class="muted" style="margin:6px 0 0">Von Nachbarn bestellt: ${openQty} Ei${openQty===1?'':'er'}. Frei für weitere Bestellungen: ${Math.max(0, avail-openQty)}.</p>` : ''}
+    ${waitN>0 ? `<p class="muted" style="margin:6px 0 0">Auf der Warteliste: ${waitN} Bestellung${waitN===1?'':'en'} (siehe oben).</p>` : ''}
     <div style="margin-top:12px">
       <div class="row"><span>Preis intern (Familien)</span><strong>${eur(internPrice())}${typeof p.priceIntern==='number'?'':' · Selbstkosten'}</strong></div>
       <div class="row" style="margin-top:6px"><span>Preis extern (Nachbarn)</span><strong>${eur(p.price)}</strong></div>
@@ -881,15 +944,16 @@ async function doTake(){
   run(async () => ok(await sb.from('egg_log').insert({id, project_id:p.id, date:today(), type:'take', n, family_id:f})))
     .then(done => { if(done) toastUndo(`${fam(f).name}: ${n} Ei${n===1?'':'er'} entnommen`, async () => ok(await sb.from('egg_log').delete().eq('id', id))); });
 }
-function sheetSale(oid){
+let saleGiven = false;   // Verkauf direkt nach „Aus meinem Anspruch abgeben“: ohne Dienst-Rückfrage
+function sheetSale(oid, seller, n){
   const o = oid ? (P().orders || []).find(x => x.id === oid) : null;
-  saleFor = o ? o.id : null; payPick = 'bar';
-  const qty = o ? o.qty : 10;
+  saleFor = o ? o.id : null; payPick = 'bar'; saleGiven = !!seller;
+  const qty = n || (o ? o.qty : 10);
   openSheet(o ? 'Bestellung ausgeben' : 'Eier verkaufen', `<p class="muted" style="margin:0">Das Geld geht in die Gemeinschaftskasse.${o?' Die Bestellung gilt danach als erledigt.':''}</p>
     <label>Käufer (z. B. Nachbar Meier)</label><input id="b" type="text" placeholder="Name" value="${o?esc(o.buyer):''}">
     <label>Anzahl</label>${stepper('n', qty, 1, undefined, ' oninput="saleCalc()"')}
     <label>Preis pro Ei, extern (€)</label><input id="p" type="text" inputmode="decimal" value="${String(P().price).replace('.',',')}" oninput="saleCalc()">
-    <label>Verkauft von</label><select id="sv">${famOptions(S.me)}</select>
+    <label>Verkauft von</label><select id="sv">${famOptions(seller || S.me)}</select>
     <label>Wie wird bezahlt?</label>${pmSeg('bar')}
     <div id="recv"><label>Erhalten (€), mehr als der Preis zählt als Trinkgeld</label><input id="rc" type="text" inputmode="decimal" value="${money(qty * P().price)}" oninput="this.dataset.touched=1"></div>` + actions('doSale()'));
   setPm('bar');
@@ -904,7 +968,7 @@ async function doSale(){
   }
   const tip = Math.round((received - expected)*100)/100;
   if(n>stock() && !(await ask(`Im Vorrat sind nur ${stock()} Eier. Möchtest du trotzdem ${n} eintragen?`, {title:'Nicht genug Eier im Vorrat', ok:'Trotzdem eintragen'}))) return;
-  if(!(await dutyCheck(today(), 'verkaufen'))) return;
+  if(!saleGiven && !(await dutyCheck(today(), 'verkaufen'))) return;
   const svEl = document.getElementById('sv'), sellerId = (svEl && val('sv')) || S.me || null;
   const p = P(), buyer = val('b').trim(), txId = uid(), eggId = uid(), oid = saleFor; saleFor = null; closeSheet();
   run(async () => {
@@ -2298,9 +2362,11 @@ function manualCard(){
         <li><b>An Nachbarn verkaufen:</b> Käufer, Anzahl und externer Preis eintragen, dazu <b>Verkauft von</b> (welche Familie verkauft) und ob <b>Bar</b> oder per <b>PayPal</b> bezahlt wird. Das Geld geht in die Gemeinschaftskasse. Danach erscheint die PayPal-Bezahlung mit QR-Code: Der Nachbar kann scannen oder den Link per <b>Per WhatsApp senden</b> bekommen. Hast du Bargeld erhalten, zahlst du es mit <b>PayPal öffnen</b> in die Gemeinschaftskasse ein.</li>
         <li>Ist kein Überschuss da, sind beide Knöpfe gesperrt.</li></ul>`),
       manDet('bestell', 'Bestellungen von Nachbarn', `<ul>
-        <li>Auf der Nachbar-Seite (Link aus dem Tab <b>Hof</b>) können Nachbarn <b>Eier bestellen</b>. Sie tragen ihre Familie und die Stückzahl ein. Bestellen können sie nur, was gerade frei ist.</li>
+        <li>Auf der Nachbar-Seite (Link aus dem Tab <b>Hof</b>) können Nachbarn <b>Eier bestellen</b>. Sie tragen ihre Familie und die Stückzahl ein (bis 30). Ist gerade nicht genug frei, kommen sie auf die <b>Warteliste</b>.</li>
         <li>Neue Bestellungen erscheinen im Tab <b>Eier</b> in der Karte <b>Bestellungen von Nachbarn</b>. Am Reiter <b>Eier</b> zeigt ein roter Punkt mit Zahl, wie viele offen sind. Zieh zum Aktualisieren nach unten, wenn du sie gleich sehen willst.</li>
         <li>Bestellte Eier gelten als reserviert. Auf der Nachbar-Seite steht dadurch weniger „verfügbar“.</li>
+        <li><b>Warteliste:</b> Bestellungen werden der Reihe nach bedient. Passt eine in den Überschuss, steht <b>bereit</b> daneben, sonst „wartet · Platz n“. Kommt eine Bestellung auf die Warteliste, bekommen alle Familien eine Nachricht. Wird sie später bereit, bekommt die Familie mit Dienst Bescheid. Nach 7 Tagen verfällt eine wartende Bestellung, der Nachbar sieht das auf seiner Seite.</li>
+        <li><b>Aus meinem Anspruch abgeben:</b> Hast du von deinen Eiern dieser Woche welche übrig, tippe bei der wartenden Bestellung darauf. Wähle die Familie, die Anzahl und ob die Eier <b>Noch im Stall</b> liegen oder <b>Schon bei uns</b> sind. Die App verringert euren Anspruch (und, wenn schon geholt, eure Entnahme) und öffnet dann den Verkauf. Das Geld geht in die Gemeinschaftskasse.</li>
         <li><b>Verkauft:</b> Tippe darauf, wenn du die Eier ausgibst. Name und Anzahl sind schon eingetragen, der Preis ist der externe. Nach dem Speichern ist die Bestellung erledigt und das Geld in der Kasse.</li>
         <li><b>✕</b> lehnt eine Bestellung ab. Die Eier sind dann wieder frei. Erledigte und abgelehnte Bestellungen stehen unter „Erledigt“. Dort löschst du sie mit <b>✕</b>, zum Beispiel Testbestellungen.</li></ul>`),
       manDet('zahlkontrolle', 'Zahlungen kontrollieren, Trinkgeld und Kassenabgleich', `<ul>

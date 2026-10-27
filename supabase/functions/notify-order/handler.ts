@@ -3,6 +3,7 @@
 //  1) Datenbank-Auslöser bei neuer Bestellung: Header x-hook-secret + {order_id}
 //  2) Zeitplan der Datenbank: Header x-hook-secret + {reminders:true}
 //  3) Test aus der App: angemeldeter Nutzer (JWT), Body {test:true}
+//  5) Zeitplan der Datenbank: Header x-hook-secret + {queue:true} (Warteliste: Bestellungen, die jetzt raus können)
 //  4) Admin-Tab: angemeldeter Admin (JWT), Body {admin:"message"|"notice"|"preview", ...}
 import { berlinNow, buildReminders, mergePerUser, type Now } from "./reminders.ts";
 export type Deps = {
@@ -48,15 +49,22 @@ export function makeHandler(d: Deps) {
     if (hook !== null) {
       if (!cfg.hook_secret || !same(hook, cfg.hook_secret)) return json({ error: "nicht erlaubt" }, 401);
       if (body?.reminders === true) return await sendReminders(d, cfg, site, body?.force === true);
+      if (body?.queue === true) return await sendQueue(d, cfg, site);
       const id = body?.order_id;
       if (!id) return json({ error: "order_id fehlt" }, 400);
-      const { data: o } = await d.admin.from("egg_orders").select("id,project_id,buyer,qty,status").eq("id", id).maybeSingle();
+      const { data: o } = await d.admin.from("egg_orders").select("id,project_id,buyer,qty,status,waited").eq("id", id).maybeSingle();
       if (!o) return json({ error: "Bestellung nicht gefunden" }, 404);
       const { data: mem } = await d.admin.from("project_members").select("family_id, families(user_id)").eq("project_id", o.project_id);
       userIds = (mem || []).map((m: any) => m.families?.user_id).filter(Boolean);
-      payload = {
+      const eier = `${o.qty} ${o.qty === 1 ? "Ei" : "Eier"}`;
+      payload = o.waited ? {
+        title: "Bestellung wartet",
+        body: `${o.buyer} möchte ${eier}, gerade ist nichts frei. Hast du welche übrig?`,
+        url: `${site}/#bestellungen`,
+        tag: `bestellung-${o.id}`,
+      } : {
         title: "Neue Bestellung",
-        body: `${o.buyer}: ${o.qty} ${o.qty === 1 ? "Ei" : "Eier"}`,
+        body: `${o.buyer}: ${eier}`,
         url: `${site}/#bestellungen`,
         tag: `bestellung-${o.id}`,
       };
@@ -78,6 +86,23 @@ export function makeHandler(d: Deps) {
 }
 
 type Payload = { title: string; body: string; url: string; tag: string };
+
+// Warteliste: Bestellungen, die jetzt in den Überschuss passen, an die Familie mit Dienst (ohne Dienst: an alle des Projekts)
+async function sendQueue(d: Deps, cfg: Record<string, string>, site: string): Promise<Response> {
+  const { data: ready, error } = await d.admin.rpc("take_ready_orders");
+  if (error) return json({ error: "Warteliste nicht lesbar" }, 500);
+  const res = { orders: (ready || []).length, sent: 0 };
+  for (const o of ready || []) {
+    let users: string[] = o.duty_user ? [o.duty_user] : [];
+    if (!users.length) {
+      const { data: mem } = await d.admin.from("project_members").select("family_id, families(user_id)").eq("project_id", o.project_id);
+      users = (mem || []).map((m: any) => m.families?.user_id).filter(Boolean);
+    }
+    const p: Payload = { title: "Bestellung kann raus", body: `Für ${o.buyer} ${o.qty === 1 ? "ist jetzt 1 Ei" : `sind jetzt ${o.qty} Eier`} frei.`, url: `${site}/#bestellungen`, tag: `bestellung-${o.id}` };
+    try { res.sent += (await sendTo(d, cfg, site, users, () => p, { TTL: 86400, urgency: "high" })).sent; } catch { /* nächste Bestellung trotzdem */ }
+  }
+  return json(res);
+}
 // Push an alle Geräte der genannten Nutzer; abgemeldete Geräte (404/410) werden gelöscht
 async function sendTo(d: Deps, cfg: Record<string, string>, site: string, userIds: string[], payloadFor: (userId: string) => Payload | null, opts: any, onlyReminders = false) {
   const res = { total: 0, sent: 0, gone: 0, failed: 0 };
