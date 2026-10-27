@@ -104,6 +104,7 @@ button.ghost{background:none;color:var(--muted);padding:4px 8px}
 .list .item:first-child{border-top:0}
 .pos{color:var(--good);font-weight:600}.neg{color:var(--bad);font-weight:600}
 .pill{display:inline-block;padding:2px 10px;border-radius:99px;background:var(--yolk);color:var(--yolk-ink);font-size:14px;font-weight:600}
+.weeknav{display:inline-flex;align-items:center;gap:2px;white-space:nowrap}.weeknav .muted{font-size:14px}
 .now{border:2px solid var(--yolk)}
 .check{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);font-weight:500}
 .check:first-of-type{border-top:0}
@@ -422,7 +423,7 @@ async function loadProject(){
   }
 }
 async function setProject(id){
-  S.cur = id; lsSet('hof-cur', id); audit = {rows:[], done:false, open:false}; txShow = 15;
+  S.cur = id; lsSet('hof-cur', id); audit = {rows:[], done:false, open:false}; txShow = 15; weekOff = 0;
   try{ await loadProject(); }catch(e){ toast('Fehler: ' + (e.message||e)); return; }
   tab = TABS[S.p.kind][0][0]; render(); window.scrollTo(0,0);
 }
@@ -704,6 +705,8 @@ function weekStats(m){
   const total = sum(p.members, id => quota() - waived[id]);
   return {laid, taken, zus, waived, sold, total, from:m, to:eD};
 }
+let weekOff = 0;   // Karte „Diese Woche“: 0 = laufende Woche, -1 = Vorwoche …
+function weekNav(k){ weekOff = Math.min(0, weekOff + k); render(); }
 function weekCard(){
   const p = P(), q = quota(), m = monday(new Date()), w = weekStats(m);
   const sp = surplusParts(m), outstanding = sp.reserved, avail = sp.surplus;
@@ -729,8 +732,8 @@ function weekCard(){
     <button class="ghost" style="margin-top:6px" onclick="sheetLaid()">Eier nachtragen</button>
     ${info('Zuerst können die Familien Zusatz-Eier zum internen Preis nehmen. Was übrig bleibt, geht an die Nachbarn. Alle Einnahmen gehen in die Gemeinschaftskasse.', 'So läuft es')}
   </div>
-  <div class="card">
-    <div class="row"><h2 style="margin:0"><span class="hi" aria-hidden="true">📅</span>Diese Woche</h2><span class="muted">${fmtDay(w.from)} – ${fmtDay(w.to)}</span></div>
+  ${weekOff < 0 ? pastWeekCard() : `<div class="card">
+    ${weekHead(m, 'Diese Woche')}
     <p class="muted" style="margin:6px 0 4px">Gelegt: ${w.laid} · Anspruch aller Familien: ${w.total}${short>0?` · es fehlen noch ${short}`:''}</p>
     <div class="list">${[...members()].sort((a,b) => (b.id===S.me) - (a.id===S.me)).map(f => {
       const t = w.taken[f.id]||0, wv = w.waived[f.id]||0, ent = q - wv;
@@ -743,6 +746,36 @@ function weekCard(){
           <button class="${f.id===S.me?'yolk':'alt'} small" onclick="sheetTake('${f.id}',${left||1})">Entnehmen</button>
           <button class="alt small" onclick="sheetWaive('${f.id}')" aria-label="Verzichten oder weniger nehmen">${wv?'Menge ändern':'Verzichten'}</button>
         </div></div>`; }).join('')}</div>
+  </div>`}`;
+}
+// Kopf der Wochenkarte mit Blättern (◀ frühere Woche, ▶ zurück Richtung heute)
+function weekHead(m, title){
+  const e = new Date(m); e.setDate(e.getDate()+6);
+  const first = firstTrackedMonday(), canBack = m > first;
+  return `<div class="row"><h2 style="margin:0"><span class="hi" aria-hidden="true">📅</span>${title}</h2>
+      <span class="weeknav"><button class="ghost small" onclick="weekNav(-1)" ${canBack?'':'disabled'} aria-label="Frühere Woche">◀</button><span class="muted">${fmtDay(m)} – ${fmtDay(e)}</span><button class="ghost small" onclick="weekNav(1)" ${weekOff<0?'':'disabled'} aria-label="Spätere Woche">▶</button></span></div>`;
+}
+// Frühere Woche: was jede Familie genommen hat, mit den einzelnen Entnahmen zum Ändern
+function pastWeekCard(){
+  const p = P(), q = quota(), m = monday(new Date()); m.setDate(m.getDate() + 7*weekOff);
+  const s = ds(m), e = new Date(m); e.setDate(e.getDate()+6); const es = ds(e);
+  const inW = p.log.filter(l => l.date >= s && l.date <= es), n = t => sum(inW.filter(l => l.type === t), l => l.n);
+  const ids = [...new Set([...p.members, ...inW.filter(l => l.fam && l.type !== 'laid').map(l => l.fam)])];
+  const fams = ids.map(id => fam(id)).filter(f => f && f.id).sort((a,b) => (b.id===S.me) - (a.id===S.me) || a.name.localeCompare(b.name));
+  const live = !p.live || es >= p.live;
+  return `<div class="card">
+    ${weekHead(m, `KW ${isoWeek(m)}`)}
+    <p class="muted" style="margin:6px 0 4px">Gelegt: ${n('laid')} · An Familien: ${n('take')} · Verkauft: ${n('sale')}${n('zusatz')?` · Zusatz: ${n('zusatz')}`:''}</p>
+    ${live ? '' : '<p class="muted" style="margin:0 0 4px">Vor dem Live-Start: zählt nicht im Vorrat, nur in der Statistik.</p>'}
+    <div class="list">${fams.map(f => {
+      const mine = inW.filter(l => l.fam === f.id && (l.type === 'take' || l.type === 'zusatz' || l.type === 'verzicht'));
+      const t = sum(mine.filter(l => l.type === 'take'), l => l.n), wv = Math.min(q, sum(mine.filter(l => l.type === 'verzicht'), l => l.n)), z = sum(mine.filter(l => l.type === 'zusatz'), l => l.n);
+      const member = p.members.includes(f.id), ent = member ? q - wv : 0;
+      return `<div class="item" style="flex-direction:column;align-items:stretch;gap:6px">
+        <div class="row"><strong>${esc(f.name)}${f.id===S.me?' <span class="muted">(du)</span>':''}</strong><span>${member ? (ent===0&&t===0?'verzichtet':`${t} von ${ent}`) : `${t} genommen`}${wv&&ent>0?` <span class="pill">Verzicht ${wv}</span>`:''}${z?` <span class="pill">+${z} Zusatz</span>`:''}</span></div>
+        ${mine.filter(l => l.type !== 'verzicht').map(l => `<div class="row" style="font-size:14px"><span class="muted">${parseD(l.date).toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'short'})}: ${l.type==='zusatz'?`${l.n} Zusatz-Ei${l.n===1?'':'er'}`:`${l.n} entnommen`}</span>${canEditDate(l.date) ? `<span><button class="alt small" onclick="sheetEditLog('${l.id}','week')">Ändern</button> <button class="ghost small" onclick="delLog('${l.id}')" aria-label="Löschen">✕</button></span>` : '<span class="muted">nur Admin</span>'}</div>`).join('')}
+      </div>`; }).join('') || '<div class="empty">In dieser Woche wurde nichts entnommen.</div>'}</div>
+    <button class="ghost" style="margin-top:8px" onclick="weekOff=0;render()">Zur laufenden Woche</button>
   </div>`;
 }
 // Wochenanspruch als kleine Eier: gefüllt = genommen, leer = noch offen
@@ -1230,7 +1263,7 @@ function sheetDay(s){
 }
 
 /* ---- Eier-Eintrag ändern ---- */
-function sheetEditLog(id){
+function sheetEditLog(id, back){
   const l = P().log.find(x => x.id === id); if(!l) return;
   const priced = l.type === 'sale' || l.type === 'zusatz';
   openSheet('Eintrag ändern', `<p class="muted" style="margin:0">${logText(l)}</p>
@@ -1238,9 +1271,9 @@ function sheetEditLog(id){
     <label>Anzahl</label>${stepper('n', l.n, 1)}
     ${(l.type==='take'||l.type==='zusatz'||l.type==='verzicht') ? `<label>${l.type==='take'?'Wer nimmt':l.type==='verzicht'?'Wer verzichtet':'Wer kauft'}</label><select id="f">${famOptions(l.fam)}</select>` : ''}
     ${l.type==='sale' ? `<label>Käufer</label><input id="b" value="${esc(l.buyer||'')}">` : ''}
-    ${priced ? `<label>Preis pro Ei (€)</label><input id="p" type="text" inputmode="decimal" value="${String(l.price).replace('.',',')}">` : ''}` + actions(`doEditLog('${id}')`));
+    ${priced ? `<label>Preis pro Ei (€)</label><input id="p" type="text" inputmode="decimal" value="${String(l.price).replace('.',',')}">` : ''}` + actions(`doEditLog('${id}'${back==='week'?",'week'":''})`));
 }
-function doEditLog(id){
+function doEditLog(id, back){
   const l = P().log.find(x => x.id === id); if(!l) return;
   const n = Math.floor(num(val('n'))), date = val('d'); if(n < 1 || !date) return;
   const upd = {n, date};
@@ -1255,7 +1288,7 @@ function doEditLog(id){
       const desc = l.type === 'sale' ? `${n} Eier an ${buyer||'Nachbar'}` : `Zusatz: ${n} Eier (${fam(upd.family_id).name})`;
       await ok(await sb.from('transactions').update({amount:Math.round(n*pr*100)/100, date, family_id:null, description:desc}).eq('id', l.txId));
     }
-  }, 'Geändert').then(() => sheetDay(date));
+  }, 'Geändert').then(() => { if(back !== 'week') sheetDay(date); });
 }
 async function delLogDay(id, date){
   const l = P().log.find(x => x.id === id); if(!l) return;
@@ -2298,7 +2331,8 @@ function manualCard(){
         <li>In der Karte <b>Diese Woche</b> hat jede Familie Anspruch auf <b>${q} Eier</b> pro Woche. Die kleinen Eier zeigen, wie viele sie schon genommen hat: gefüllt = genommen, leer = noch offen.</li>
         <li><b>Entnehmen:</b> trägt ein, dass die Familie ihre Eier abholt. Die Menge ist mit dem Rest vorausgefüllt.</li>
         <li><b>Verzichten:</b> Die Familie nimmt weniger oder gar nichts. Gib ein, wie viele Eier sie diese Woche nimmt, von 0 bis ${q}. Der Rest wird sofort Überschuss. Das gilt nur für diese Woche, nächste Woche gelten wieder ${q}. Mit <b>Menge ändern</b> nimmst du es zurück.</li>
-        <li>Nimmt eine Familie mehr als ihren Anspruch, steht dort <b>+n Zusatz</b>.</li></ul>`),
+        <li>Nimmt eine Familie mehr als ihren Anspruch, steht dort <b>+n Zusatz</b>.</li>
+        <li>Mit ◀ und ▶ oben in der Karte blätterst du in frühere Wochen. Dort siehst du, wer wann wie viele Eier genommen hat, und kannst jede Entnahme mit <b>Ändern</b> korrigieren oder mit ✕ löschen (ältere als 14 Tage nur der Admin). <b>Zur laufenden Woche</b> bringt dich zurück.</li></ul>`),
       manDet('stat', 'Statistik', `<ul>
         <li><b>Tage:</b> die Woche als Säulen. Mit ‹ und › blätterst du zurück, ein Tipp auf eine Säule öffnet den Tag.</li>
         <li><b>Wochen:</b> alle Kalenderwochen nebeneinander (seitlich wischen), dazu Gesamt, Durchschnitt und beste Woche.</li>
@@ -2310,6 +2344,7 @@ function manualCard(){
       kalender, kasse, fehler, protokoll, adminSec,
       manDet('faq', 'Häufige Fragen', `<ul>
         <li><i>Eine Familie nimmt nur 6 Eier.</i> Tippe bei ihr auf <b>Verzichten</b> und trage 6 ein.</li>
+        <li><i>Eine Familie gibt nachträglich Eier aus der Vorwoche ab, die verkauft werden.</i> Blättere in <b>Diese Woche</b> mit ◀ zur Vorwoche, tippe bei ihrer Entnahme auf <b>Ändern</b> und setze die Anzahl herunter (zum Beispiel von 10 auf 5). Die Eier zählen dann wieder zum Überschuss, und du trägst sie mit <b>An Nachbarn verkaufen</b> ein.</li>
         <li><i>Warum kann ich nichts verkaufen?</i> Es gibt gerade keinen Überschuss. Prüfe „Vorrat &amp; Überschuss“ und die Verzichte der Familien.</li>
         <li><i>Im Winter legen die Hennen weniger.</i> Der Anspruch bleibt gleich. Die Karte <b>Diese Woche</b> zeigt dann „es fehlen noch …“. Ihr verteilt die Eier nach Absprache oder nutzt <b>Verzichten</b>.</li>
         <li><i>Ein Nachbar fragt, ob Eier da sind.</i> Öffne den Tab <b>Hof</b>, tippe bei „Nachbar-Seite“ auf <b>Link für Nachbarn teilen</b> und schicke ihm den Link.</li>
