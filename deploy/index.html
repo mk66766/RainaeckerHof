@@ -365,7 +365,7 @@ async function boot(user){
   if(deep){ if(tabsOf(S.p.kind).some(x => x[0] === deep.tab)) tab = deep.tab; try{ history.replaceState(null, '', location.pathname); }catch(e){} }
   render();
   ensurePushRegistered();      // Gerät nach dem Anmelden still wieder eintragen
-  refreshPushState();
+  refreshPushState().then(pushPrompt);
 }
 
 function hensHistory(st){
@@ -1900,6 +1900,19 @@ async function refreshPushState(){
   }catch(e){ push.state = 'nicht-unterstuetzt'; }
   if(S.p && tab === 'hof') render();
 }
+// Beim Öffnen einmal fragen, wenn auf diesem Gerät noch keine Benachrichtigungen an sind ("Später": in 3 Tagen wieder)
+async function pushPrompt(){
+  const key = 'hof-push-frage', st = push.state, until = lsGet(key);
+  if(!S.p || (st !== 'aus' && st !== 'ios-installieren') || (until && today() < until)) return;
+  for(let i = 0; i < 60 && document.getElementById('dlg'); i++) await new Promise(r => setTimeout(r, 1000));   // erst wenn kein anderes Fenster offen ist
+  if(document.getElementById('dlg')) return;
+  const later = new Date(); later.setDate(later.getDate() + 3); lsSet(key, ds(later));
+  if(st === 'ios-installieren'){
+    await ask('Damit du Nachrichten vom Hof bekommst (neue Bestellungen, Dienst, Erinnerungen), lege die App auf den Home-Bildschirm: Teilen-Symbol, dann „Zum Home-Bildschirm“. Öffne sie danach von dort.', {title:'Benachrichtigungen', ok:'Alles klar', cancel:false});
+    return;
+  }
+  if(await ask('Möchtest du auf diesem Handy eine Nachricht bekommen, wenn Nachbarn Eier bestellen, und Erinnerungen an Dienst und offene Zahlungen?', {title:'Benachrichtigungen einschalten?', ok:'Einschalten', cancel:'Später'})) await enablePush();
+}
 async function saveSub(sub){
   const j = sub.toJSON();
   await ok(await sb.from('push_subscriptions').upsert({user_id:S.user.id, endpoint:j.endpoint, p256dh:j.keys.p256dh, auth:j.keys.auth, user_agent:navigator.userAgent.slice(0,200)}, {onConflict:'user_id,endpoint'}));
@@ -2276,7 +2289,7 @@ function manualCard(){
         <li>Unter <b>Bearbeiten</b> zeigt <b>Code anzeigen</b> den zuletzt vergebenen Code, mit <b>Einladung senden</b> kannst du ihn erneut verschicken. Codes von vor dem 20.10.2026 sind nicht hinterlegt: Vergib dann einen neuen.</li>
         <li>Alle Änderungen stehen im <b>Änderungsprotokoll</b>. Die Codes selbst stehen dort nie.</li></ul>`),
       manDet('push', 'Benachrichtigungen aufs Handy', `<ul>
-        <li>Im Tab <b>Hof</b> tippst du bei „Benachrichtigungen“ auf <b>Benachrichtigungen einschalten</b> und erlaubst die Nachrichten. Danach bekommst du eine Nachricht aufs Handy, sobald ein Nachbar Eier bestellt. Ein Tipp darauf öffnet die App bei den Bestellungen.</li>
+        <li>Beim Öffnen fragt die App einmal, ob du Benachrichtigungen möchtest: Tippe auf <b>Einschalten</b> und erlaube die Nachrichten (mit <b>Später</b> fragt sie in 3 Tagen wieder). Du kannst sie auch jederzeit im Tab <b>Hof</b> bei „Benachrichtigungen“ mit <b>Benachrichtigungen einschalten</b> einschalten. Danach bekommst du eine Nachricht aufs Handy, sobald ein Nachbar Eier bestellt. Ein Tipp darauf öffnet die App bei den Bestellungen.</li>
         <li>Jede Familie schaltet das auf ihrem <b>eigenen Handy</b> ein. Mit <b>Test senden</b> prüfst du, ob es ankommt, und mit <b>Ausschalten</b> hörst du wieder auf.</li>
         <li><b>Erinnerungen:</b> Um 18 Uhr schickt der Hof eine Nachricht, wenn etwas ansteht: am Sonntag „Nächste Woche hast du Dienst“, dazu Bargeld, das seit einer Woche nicht eingezahlt ist, PayPal-Eingänge, die seit drei Tagen auf Bestätigung warten, am 1. des Monats (nur an den Admin) Abgleich und Sicherung, und sonntags ein kurzer Wochenrückblick (gelegt, an Familien, verkauft, eingenommen). Ein Tipp auf die Nachricht öffnet die passende Seite. In der Karte „Benachrichtigungen“ schaltest du die Erinnerungen auf diesem Gerät mit <b>Ausschalten</b> ab, die Bestell-Nachrichten bleiben davon unberührt.</li>
         <li><b>iPhone:</b> Das geht nur ab iOS 16.4 und nur, wenn die App auf dem Home-Bildschirm liegt (Teilen-Symbol, „Zum Home-Bildschirm“). Öffne die App dann von dort.</li>
