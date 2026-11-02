@@ -825,7 +825,7 @@ function pastWeekCard(){
   const inW = p.log.filter(l => l.date >= s && l.date <= es), n = t => sum(inW.filter(l => l.type === t), l => l.n);
   const ids = [...new Set([...p.members, ...inW.filter(l => l.fam && l.type !== 'laid').map(l => l.fam)])];
   const fams = ids.map(id => fam(id)).filter(f => f && f.id).sort((a,b) => (b.id===S.me) - (a.id===S.me) || a.name.localeCompare(b.name));
-  const live = !p.live || es >= p.live;
+  const live = !p.live || es >= p.live, addDate = es < today() ? es : today();   // Nachtrag: Sonntag der Woche
   return `<div class="card">
     ${weekHead(m, `KW ${isoWeek(m)}`)}
     <p class="muted" style="margin:6px 0 4px">Gelegt: ${n('laid')} · An Familien: ${n('take')} · Verkauft: ${n('sale')}${n('zusatz')?` · Zusatz: ${n('zusatz')}`:''}</p>
@@ -837,6 +837,7 @@ function pastWeekCard(){
       return `<div class="item" style="flex-direction:column;align-items:stretch;gap:6px">
         <div class="row"><strong>${esc(f.name)}${f.id===S.me?' <span class="muted">(du)</span>':''}</strong><span>${member ? (ent===0&&t===0?'verzichtet':`${t} von ${ent}`) : `${t} genommen`}${wv&&ent>0?` <span class="pill">Verzicht ${wv}</span>`:''}${z?` <span class="pill">+${z} Zusatz</span>`:''}</span></div>
         ${mine.filter(l => l.type !== 'verzicht').map(l => `<div class="row" style="font-size:14px"><span class="muted">${parseD(l.date).toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'short'})}: ${l.type==='zusatz'?`${l.n} Zusatz-Ei${l.n===1?'':'er'}`:`${l.n} entnommen`}</span>${canEditDate(l.date) ? `<span><button class="alt small" onclick="sheetEditLog('${l.id}','week')">Ändern</button> <button class="ghost small" onclick="delLog('${l.id}')" aria-label="Löschen">✕</button></span>` : '<span class="muted">nur Admin</span>'}</div>`).join('')}
+        ${member && canEditDate(addDate) ? `<button class="alt small" style="align-self:flex-start" onclick="sheetTake('${f.id}',${Math.max(1, ent - t)},'${addDate}')">Entnahme nachtragen</button>` : ''}
       </div>`; }).join('') || '<div class="empty">In dieser Woche wurde nichts entnommen.</div>'}</div>
     <button class="ghost" style="margin-top:8px" onclick="weekOff=0;render()">Zur laufenden Woche</button>
   </div>`;
@@ -933,16 +934,30 @@ async function delLog(id){
     await ok(await sb.from('egg_log').delete().eq('id', id));
   });
 }
-function sheetTake(fid, n){
-  openSheet('Eier entnehmen', `<label>Wer nimmt Eier?</label><select id="f">${famOptions(fid)}</select>
-    <label>Anzahl</label>${stepper('n', n||6, 1)}` + actions('doTake()'));
+// Entnahme eintragen, auch nachträglich (Datum wählbar, ältere als 14 Tage nur der Admin)
+function takeMin(){
+  const st = P().start || '', d = new Date(); d.setDate(d.getDate() - EDIT_DAYS);
+  return S.admin ? st : [st, ds(d)].sort().pop();
+}
+function sheetTake(fid, n, d0){
+  openSheet(d0 ? 'Entnahme nachtragen' : 'Eier entnehmen', `<label>Wer nimmt Eier?</label><select id="f">${famOptions(fid)}</select>
+    <label>Anzahl</label>${stepper('n', n||6, 1)}
+    <label>Datum</label><input id="d" type="date" value="${d0||today()}" min="${takeMin()}" max="${today()}">
+    <p class="muted" style="margin:6px 0 0">Für die Vorwoche einfach ein Datum aus dieser Woche wählen. Die Eier zählen dann zum Anspruch dieser Woche.</p>` + actions('doTake()'));
 }
 async function doTake(){
-  const n=Math.floor(num(val('n'))); if(n<1) return;
-  if(n>stock() && !(await ask(`Im Vorrat sind nur ${stock()} Eier. Möchtest du trotzdem ${n} eintragen?`, {title:'Nicht genug Eier im Vorrat', ok:'Trotzdem eintragen'}))) return;
-  const p = P(), f = val('f'), id = uid(); closeSheet();
-  run(async () => ok(await sb.from('egg_log').insert({id, project_id:p.id, date:today(), type:'take', n, family_id:f})))
-    .then(done => { if(done) toastUndo(`${fam(f).name}: ${n} Ei${n===1?'':'er'} entnommen`, async () => ok(await sb.from('egg_log').delete().eq('id', id))); });
+  const n=Math.floor(num(val('n'))), date = val('d') || today(), f = val('f'); if(n<1) return;
+  if(date > today() || date < takeMin()){ toast(`Datum geht nur von ${fmtDay(parseD(takeMin()))} bis heute.`); return; }
+  if(date === today()){
+    if(n>stock() && !(await ask(`Im Vorrat sind nur ${stock()} Eier. Möchtest du trotzdem ${n} eintragen?`, {title:'Nicht genug Eier im Vorrat', ok:'Trotzdem eintragen'}))) return;
+  } else {
+    const m = monday(parseD(date)), w = weekStats(m), left = Math.max(0, quota() - (w.waived[f]||0) - (w.taken[f]||0));
+    if(P().members.includes(f) && n > left && !(await ask(`${fam(f).name} hat in KW ${isoWeek(m)} nur noch ${left} Ei${left===1?'':'er'} Anspruch offen. Trotzdem ${n} eintragen?`, {title:'Mehr als der Anspruch', ok:'Trotzdem eintragen'}))) return;
+  }
+  const p = P(), id = uid(); closeSheet();
+  const when = date === today() ? '' : ` (${fmtDay(parseD(date))})`;
+  run(async () => ok(await sb.from('egg_log').insert({id, project_id:p.id, date, type:'take', n, family_id:f})))
+    .then(done => { if(done) toastUndo(`${fam(f).name}: ${n} Ei${n===1?'':'er'} entnommen${when}`, async () => ok(await sb.from('egg_log').delete().eq('id', id))); });
 }
 let saleGiven = false;   // Verkauf direkt nach „Aus meinem Anspruch abgeben“: ohne Dienst-Rückfrage
 function sheetSale(oid, seller, n){
@@ -1321,6 +1336,7 @@ function sheetDay(s){
       <button class="alt" onclick="sheetEvent(null,'${s}')">Termin</button>
       ${isHens() ? `<button class="alt" onclick="sheetLaid('${s}')">Eier nachtragen</button>` : '<span></span>'}
     </div>
+    ${isHens() && s >= takeMin() ? `<button class="alt" style="width:100%;margin-top:10px" onclick="sheetTake('${S.me}',6,'${s}')">Entnahme nachtragen</button>` : ''}
     <button class="alt" style="width:100%;margin-top:10px" onclick="sheetTx('${s}')">Buchung nachtragen</button>
     ${!can ? `<p class="muted" style="margin:10px 0 0">Einträge, die älter als ${EDIT_DAYS} Tage sind, kann nur der Admin ändern.</p>` : ''}
     <button class="alt" style="width:100%;margin-top:10px" onclick="closeSheet()">Schließen</button>`);
@@ -2398,7 +2414,7 @@ function manualCard(){
         <li><b>Entnehmen:</b> trägt ein, dass die Familie ihre Eier abholt. Die Menge ist mit dem Rest vorausgefüllt.</li>
         <li><b>Verzichten:</b> Die Familie nimmt weniger oder gar nichts. Gib ein, wie viele Eier sie diese Woche nimmt, von 0 bis ${q}. Der Rest wird sofort Überschuss. Das gilt nur für diese Woche, nächste Woche gelten wieder ${q}. Mit <b>Menge ändern</b> nimmst du es zurück.</li>
         <li>Nimmt eine Familie mehr als ihren Anspruch, steht dort <b>+n Zusatz</b>.</li>
-        <li>Mit ◀ und ▶ oben in der Karte blätterst du in frühere Wochen. Dort siehst du, wer wann wie viele Eier genommen hat, und kannst jede Entnahme mit <b>Ändern</b> korrigieren oder mit ✕ löschen (ältere als 14 Tage nur der Admin). <b>Zur laufenden Woche</b> bringt dich zurück.</li></ul>`),
+        <li>Mit ◀ und ▶ oben in der Karte blätterst du in frühere Wochen. Dort siehst du, wer wann wie viele Eier genommen hat, und kannst jede Entnahme mit <b>Ändern</b> korrigieren oder mit ✕ löschen (ältere als 14 Tage nur der Admin). Vergessene Entnahmen trägst du dort bei der Familie mit <b>Entnahme nachtragen</b> ein (zählt für die Woche, die du gerade siehst). Beim Entnehmen kannst du auch selbst ein <b>Datum</b> wählen. <b>Zur laufenden Woche</b> bringt dich zurück.</li></ul>`),
       manDet('stat', 'Statistik', `<ul>
         <li><b>Tage:</b> die Woche als Säulen. Mit ‹ und › blätterst du zurück, ein Tipp auf eine Säule öffnet den Tag.</li>
         <li><b>Wochen:</b> alle Kalenderwochen nebeneinander (seitlich wischen), dazu Gesamt, Durchschnitt und beste Woche.</li>
