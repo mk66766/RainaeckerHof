@@ -776,15 +776,10 @@ function weekCard(){
   return `
   <div class="card">
     <h2><span class="hi" aria-hidden="true">🥚</span>Vorrat &amp; Verkauf</h2>
-    <div class="grid2">
-      <div><div class="muted">Vorrat</div><div class="stock"><span class="big">${stock()}</span><span>Eier</span></div></div>
-      <div><div class="muted">zum Verkauf</div><div class="stock"><span class="big" style="color:var(--good)">${avail}</span><span>Eier</span></div></div>
-    </div>
-    <p class="muted" style="margin:8px 0 0">Alle Eier im Vorrat sind verkäuflich. Die ersten ${q} Eier pro Woche sind für jede Familie frei, jedes weitere kostet ${eur(internPrice())}.${w.sold?` Diese Woche verkauft: ${w.sold}.`:''}</p>
-    ${(() => { const f = weekForecast(); return f.restDays > 0 ? `<p class="muted" style="margin:6px 0 0">Prognose bis Sonntag: noch etwa <b>${f.more}</b> Eier. Die Familien können noch ${f.open} freie Eier holen${f.orders?`, Nachbarn haben ${f.orders} bestellt`:''}. ${f.left >= 0 ? 'Das reicht voraussichtlich für alle.' : `Es fehlen voraussichtlich etwa <b>${-f.left}</b> Eier.`}</p>` : ''; })()}
-    ${sp.carryLeft>0 ? `<p class="muted" style="margin:6px 0 0">Davon sind <b>${sp.carryLeft}</b> Eier aus der Vorwoche (Übertrag). Die bitte zuerst verkaufen.</p>` : ''}
-    ${openQty>0 ? `<p class="muted" style="margin:6px 0 0">Von Nachbarn bestellt: ${openQty} Ei${openQty===1?'':'er'}. Frei für weitere Bestellungen: ${Math.max(0, avail-openQty)}.</p>` : ''}
-    ${waitN>0 ? `<p class="muted" style="margin:6px 0 0">Auf der Warteliste: ${waitN} Bestellung${waitN===1?'':'en'} (siehe oben).</p>` : ''}
+    <div class="stock"><span class="big">${stock()}</span><span>Eier im Vorrat</span></div>
+    ${(() => { const f = weekForecast(); return f.restDays > 0 ? `<p class="muted" style="margin:6px 0 0">Bis Sonntag noch etwa ${f.more} Eier${f.left >= 0 ? ' · reicht für alle' : ` · es fehlen etwa <b>${-f.left}</b>`}</p>` : ''; })()}
+    ${openQty>0 ? `<p class="muted" style="margin:4px 0 0">Von Nachbarn bestellt: ${openQty}</p>` : ''}
+    ${waitN>0 ? `<p class="muted" style="margin:4px 0 0">Auf der Warteliste: ${waitN}</p>` : ''}
     <div style="margin-top:12px">
       <div class="row"><span>Preis intern (Familien)</span><strong>${eur(internPrice())}${typeof p.priceIntern==='number'?'':' · Selbstkosten'}</strong></div>
       <div class="row" style="margin-top:6px"><span>Preis extern (Nachbarn)</span><strong>${eur(p.price)}</strong></div>
@@ -794,7 +789,7 @@ function weekCard(){
       <button class="alt" onclick="sheetSale()" ${avail<1?'disabled':''}>An Nachbarn verkaufen</button>
     </div>
     <button class="ghost" style="margin-top:6px" onclick="sheetLaid()">Eier nachtragen</button>
-    ${info('Alle Eier im Vorrat sind verkäuflich, wer zuerst kommt. Familien nehmen die ersten Eier jeder Woche kostenlos, darüber zahlen sie den internen Preis. Alle Einnahmen gehen in die Gemeinschaftskasse.', 'So läuft es')}
+    ${info(`Alle Eier im Vorrat sind verkäuflich, wer zuerst kommt. Familien nehmen die ersten ${q} Eier pro Woche kostenlos, jedes weitere kostet den internen Preis. Die Prognose schätzt aus den letzten 14 Tagen, ob die Eier bis Sonntag reichen. Alle Einnahmen gehen in die Gemeinschaftskasse.`, 'So läuft es')}
   </div>
   ${weekOff < 0 ? pastWeekCard() : `<div class="card">
     ${weekHead(m, 'Diese Woche')}
