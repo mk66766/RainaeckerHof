@@ -2619,6 +2619,8 @@ const PUSH_KINDS = [
   ['pay_check', 'Zahlung prüfen', 'geht nur an Admins'],
   ['month', 'Monatsabschluss', 'am 1., geht nur an Admins']
 ];
+const ADMIN_KINDS = ['pay_check','month'];
+const kindsOf = f => PUSH_KINDS.filter(k => f.admin || !ADMIN_KINDS.includes(k[0]));
 const prefOn = (fid, kind) => !(adm.prefs || []).some(x => x.family_id === fid && x.kind === kind && x.enabled === false);
 function admPrefCard(){
   const fams = S.fams.filter(f => !f.left).sort((a,b) => (!!a.system - !!b.system) || a.name.localeCompare(b.name));
@@ -2626,10 +2628,10 @@ function admPrefCard(){
   return `<div class="card list">
     <h2><span class="hi" aria-hidden="true">🔔</span>Wer bekommt was?</h2>
     <p class="muted" style="margin:0 0 4px">Haken = die Familie bekommt diese Nachricht. Die Schalter am Handy (Hof → Benachrichtigungen) gelten zusätzlich.</p>
-    ${fams.map(f => `<details class="item" style="display:block" ${adm.prefOpen === f.id ? 'open' : ''} ontoggle="if(this.open) adm.prefOpen='${f.id}'"><summary style="cursor:pointer;font-weight:600">${esc(f.name)}${f.system ? ' <span class="muted">(Admin-Konto)</span>' : ''} <span class="muted" style="font-weight:400">· ${PUSH_KINDS.filter(k => prefOn(f.id, k[0])).length} von ${PUSH_KINDS.length} an</span></summary>
-      ${PUSH_KINDS.map(k => `<label style="display:flex;align-items:center;gap:10px;margin-top:10px;font-size:16px"><input type="checkbox" ${prefOn(f.id, k[0]) ? 'checked' : ''} onchange="admPrefSet('${f.id}','${k[0]}',this.checked)" style="width:auto;margin:0"><span>${k[1]} <span class="muted" style="font-size:14px">· ${k[2]}</span></span></label>`).join('')}
+    ${fams.map(f => `<details class="item" style="display:block" ${adm.prefOpen === f.id ? 'open' : ''} ontoggle="if(this.open) adm.prefOpen='${f.id}'"><summary style="cursor:pointer;font-weight:600">${esc(f.name)}${f.system ? ' <span class="muted">(Admin-Konto)</span>' : ''} <span class="muted" style="font-weight:400">· ${kindsOf(f).filter(k => prefOn(f.id, k[0])).length} von ${kindsOf(f).length} an</span></summary>
+      ${kindsOf(f).map(k => `<label style="display:flex;align-items:center;gap:10px;margin-top:10px;font-size:16px"><input type="checkbox" ${prefOn(f.id, k[0]) ? 'checked' : ''} onchange="admPrefSet('${f.id}','${k[0]}',this.checked)" style="width:auto;margin:0"><span>${k[1]} <span class="muted" style="font-size:14px">· ${k[2]}</span></span></label>`).join('')}
     </details>`).join('')}
-    ${info('Gilt für alle Geräte der Familie. Hinweise und Nachrichten, die du im Tab Admin selbst verschickst, kommen immer an. „Zahlung prüfen“ und „Monatsabschluss“ bekommen ohnehin nur Admins.')}
+    ${info('Gilt für alle Geräte der Familie. Hinweise und Nachrichten, die du im Tab Admin selbst verschickst, kommen immer an. „Zahlung prüfen“ und „Monatsabschluss“ gibt es nur beim Admin-Konto.')}
   </div>`;
 }
 async function admPrefSet(fid, kind, on){
