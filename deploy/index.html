@@ -692,9 +692,9 @@ function ordersCard(){
       ? `<div class="item"><div><strong>${esc(o.buyer)}</strong> <span class="pill">bereit</span><div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div></div>
       <div style="display:flex;align-items:center;gap:6px"><button class="yolk small" onclick="sheetSale('${o.id}')">Verkauft</button><button class="ghost" onclick="orderReject('${o.id}')" aria-label="Bestellung ablehnen">✕</button></div></div>`
       : `<div class="item" style="flex-direction:column;align-items:stretch;gap:8px"><div class="row"><div><strong>${esc(o.buyer)}</strong> <span class="muted">wartet · Platz ${q[o.id].pos}</span><div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div></div><button class="ghost" onclick="orderReject('${o.id}')" aria-label="Bestellung ablehnen">✕</button></div>
-      <button class="alt small" onclick="sheetGive('${o.id}')">Aus meinem Anspruch abgeben</button></div>`).join('')
+      </div>`).join('')
       : '<div class="empty">Keine offenen Bestellungen.</div>'}
-    ${open.some(o => !q[o.id].ready) ? `<p class="muted" style="margin:8px 0 0">Wartende Bestellungen werden der Reihe nach bereit, sobald Überschuss da ist. Hat eine Familie Eier aus ihrem Anspruch übrig, kann sie sie mit <b>Aus meinem Anspruch abgeben</b> verkaufen. Nach ${ORDER_DAYS} Tagen verfällt eine Bestellung.</p>` : ''}
+    ${open.some(o => !q[o.id].ready) ? `<p class="muted" style="margin:8px 0 0">Wartende Bestellungen werden der Reihe nach bereit, sobald genug Eier im Vorrat sind. Nach ${ORDER_DAYS} Tagen verfällt eine Bestellung.</p>` : ''}
     ${done.length ? `<details style="margin-top:8px"><summary class="muted" style="cursor:pointer">Erledigt (${done.length})</summary>
       ${done.map(o => `<div class="item"><div>${esc(o.buyer)}<div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div></div><div style="display:flex;align-items:center;gap:4px"><span class="muted">${DONE[o.status]||o.status}</span><button class="ghost" onclick="orderDelete('${o.id}')" aria-label="Bestellung löschen">✕</button></div></div>`).join('')}</details>` : ''}
   </div>`;
@@ -771,16 +771,17 @@ let weekOff = 0;   // Karte „Diese Woche“: 0 = laufende Woche, -1 = Vorwoche
 function weekNav(k){ weekOff = Math.min(0, weekOff + k); render(); }
 function weekCard(){
   const p = P(), q = quota(), m = monday(new Date()), w = weekStats(m);
-  const sp = surplusParts(m), outstanding = sp.reserved, avail = sp.surplus;
+  const sp = surplusParts(m), avail = sp.surplus;
   const short = Math.max(0, w.total - w.laid), oq = orderQueue(), openQty = sum(openOrders().filter(o => oq.q[o.id].ready), o => o.qty), waitN = openOrders().length - openOrders().filter(o => oq.q[o.id].ready).length;
   return `
   <div class="card">
-    <h2><span class="hi" aria-hidden="true">🥚</span>Vorrat &amp; Überschuss</h2>
+    <h2><span class="hi" aria-hidden="true">🥚</span>Vorrat &amp; Verkauf</h2>
     <div class="grid2">
       <div><div class="muted">Vorrat</div><div class="stock"><span class="big">${stock()}</span><span>Eier</span></div></div>
-      <div><div class="muted">davon Überschuss</div><div class="stock"><span class="big" style="color:var(--good)">${avail}</span><span>Eier</span></div></div>
+      <div><div class="muted">zum Verkauf</div><div class="stock"><span class="big" style="color:var(--good)">${avail}</span><span>Eier</span></div></div>
     </div>
-    <p class="muted" style="margin:8px 0 0">Den Familien stehen diese Woche noch ${outstanding} Eier zu.${w.sold?` Diese Woche verkauft: ${w.sold}.`:''}</p>
+    <p class="muted" style="margin:8px 0 0">Alle Eier im Vorrat sind verkäuflich. Die ersten ${q} Eier pro Woche sind für jede Familie frei, jedes weitere kostet ${eur(internPrice())}.${w.sold?` Diese Woche verkauft: ${w.sold}.`:''}</p>
+    ${(() => { const f = weekForecast(); return f.restDays > 0 ? `<p class="muted" style="margin:6px 0 0">Prognose bis Sonntag: noch etwa <b>${f.more}</b> Eier. Die Familien können noch ${f.open} freie Eier holen${f.orders?`, Nachbarn haben ${f.orders} bestellt`:''}. ${f.left >= 0 ? 'Das reicht voraussichtlich für alle.' : `Es fehlen voraussichtlich etwa <b>${-f.left}</b> Eier.`}</p>` : ''; })()}
     ${sp.carryLeft>0 ? `<p class="muted" style="margin:6px 0 0">Davon sind <b>${sp.carryLeft}</b> Eier aus der Vorwoche (Übertrag). Die bitte zuerst verkaufen.</p>` : ''}
     ${openQty>0 ? `<p class="muted" style="margin:6px 0 0">Von Nachbarn bestellt: ${openQty} Ei${openQty===1?'':'er'}. Frei für weitere Bestellungen: ${Math.max(0, avail-openQty)}.</p>` : ''}
     ${waitN>0 ? `<p class="muted" style="margin:6px 0 0">Auf der Warteliste: ${waitN} Bestellung${waitN===1?'':'en'} (siehe oben).</p>` : ''}
@@ -793,22 +794,20 @@ function weekCard(){
       <button class="alt" onclick="sheetSale()" ${avail<1?'disabled':''}>An Nachbarn verkaufen</button>
     </div>
     <button class="ghost" style="margin-top:6px" onclick="sheetLaid()">Eier nachtragen</button>
-    ${info('Zuerst können die Familien Zusatz-Eier zum internen Preis nehmen. Was übrig bleibt, geht an die Nachbarn. Alle Einnahmen gehen in die Gemeinschaftskasse.', 'So läuft es')}
+    ${info('Alle Eier im Vorrat sind verkäuflich, wer zuerst kommt. Familien nehmen die ersten Eier jeder Woche kostenlos, darüber zahlen sie den internen Preis. Alle Einnahmen gehen in die Gemeinschaftskasse.', 'So läuft es')}
   </div>
   ${weekOff < 0 ? pastWeekCard() : `<div class="card">
     ${weekHead(m, 'Diese Woche')}
-    <p class="muted" style="margin:6px 0 4px">Gelegt: ${w.laid} · Anspruch aller Familien: ${w.total}${short>0?` · es fehlen noch ${short}`:''}</p>
+    <p class="muted" style="margin:6px 0 4px">Gelegt: ${w.laid} · Genommen: ${sum(Object.values(w.taken), x => x)}</p>
     <div class="list">${[...members()].sort((a,b) => (b.id===S.me) - (a.id===S.me)).map(f => {
-      const t = w.taken[f.id]||0, wv = w.waived[f.id]||0, ent = q - wv;
+      const t = w.taken[f.id]||0, wv = 0, ent = q;
       const left = Math.max(0, ent-t), extra = Math.max(0, t-ent) + (w.zus[f.id]||0);
       return `<div class="item" style="flex-direction:column;align-items:stretch;gap:8px"><div>
         <div class="row"><strong>${esc(f.name)}${f.id===S.me?' <span class="muted">(du)</span>':''}</strong><span>${ent===0&&t===0?'verzichtet':`${t} von ${ent}`}${wv&&ent>0?` <span class="pill">Verzicht ${wv}</span>`:''}${extra?` <span class="pill">+${extra} Zusatz</span>`:''}</span></div>
         ${ent>0 ? `<div class="eier" role="img" aria-label="${Math.min(t,ent)} von ${ent} Eiern genommen">${eggIcons(Math.min(t,ent), ent)}</div>` : ''}
         </div>
-        <div class="grid2">
-          <button class="${f.id===S.me?'yolk':'alt'} small" onclick="sheetTake('${f.id}',${left||1})">Entnehmen</button>
-          <button class="alt small" onclick="sheetWaive('${f.id}')" aria-label="Verzichten oder weniger nehmen">${wv?'Menge ändern':'Verzichten'}</button>
-        </div></div>`; }).join('')}</div>
+        <button class="${f.id===S.me?'yolk':'alt'} small" onclick="sheetTake('${f.id}',${left||1})">Entnehmen</button>
+        </div>`; }).join('')}</div>
   </div>`}`;
 }
 // Kopf der Wochenkarte mit Blättern (◀ frühere Woche, ▶ zurück Richtung heute)
@@ -880,7 +879,7 @@ function internPrice(){
    Von den Eiern der laufenden Woche gehen zuerst die noch offenen Wochenansprüche der Familien ab, der Rest ist Verkaufsbestand. */
 function surplusParts(m){
   const p = P(), q = quota(), s = ds(m), e = new Date(m); e.setDate(e.getDate() + 6); const es = ds(e), w = weekStats(m);
-  const reserved = sum(p.members, id => Math.max(0, (q - (w.waived[id]||0)) - (w.taken[id]||0)));
+  const reserved = 0;   // seit 03.11.2026 wird nichts mehr für die Familien zurückgelegt: alles im Vorrat ist verkäuflich
   const carry = Math.max(0, sum(p.log.filter(l => isLive(l.date) && l.date < s), l => l.type==='laid' ? l.n : l.type==='verzicht' ? 0 : -l.n));
   const inW = p.log.filter(l => isLive(l.date) && l.date >= s && l.date <= es);
   const L = sum(inW.filter(l => l.type==='laid'), l => l.n), T = sum(inW.filter(l => l.type==='take'), l => l.n), V = sum(inW.filter(l => l.type==='sale' || l.type==='zusatz'), l => l.n);
@@ -888,8 +887,21 @@ function surplusParts(m){
   return {reserved, carryLeft: Math.min(total, oldRem), surplus: Math.max(0, Math.min(total, oldRem + Math.max(0, newRem - reserved)))};
 }
 function availNow(){ return surplusParts(monday(new Date())).surplus; }
-function sheetZusatz(fid, n){
-  payPick = 'paypal';
+// Anzeige (sperrt nichts): Reichen die Eier bis Sonntag für die freien Eier der Familien?
+function weekForecast(){
+  const p = P(), q = quota(), m = monday(new Date()), w = weekStats(m), today0 = parseD(today());
+  const from = new Date(today0); from.setDate(from.getDate() - 14);
+  const startD = parseD([ds(from), p.live || '', p.start || ''].sort().pop());
+  const days = Math.max(1, Math.round((today0 - startD) / 864e5));
+  const recent = sum(p.log.filter(l => l.type==='laid' && l.date >= ds(startD) && l.date < today()), l => l.n);
+  const perDay = recent / days, restDays = 6 - ((today0.getDay() + 6) % 7);
+  const more = Math.round(perDay * restDays), open = sum(p.members, id => Math.max(0, q - (w.taken[id]||0)));
+  const orders = sum(openOrders(), o => o.qty);
+  return {perDay, restDays, more, open, orders, left: stock() + more - open - orders};
+}
+let zusatzDate = null;   // Zusatz zu einer nachgetragenen Entnahme: Datum der Entnahme
+function sheetZusatz(fid, n, date){
+  payPick = 'paypal'; zusatzDate = date || null;
   openSheet('Zusatz-Eier nehmen', `<p class="muted" style="margin:0">Zum internen Preis für Familien. Das Geld geht in die Gemeinschaftskasse.</p>
     <label>Wer nimmt Eier?</label><select id="f">${famOptions(fid)}</select>
     <label>Anzahl</label>${stepper('n', n||1, 1)}
@@ -899,11 +911,11 @@ function sheetZusatz(fid, n){
 }
 async function doZusatz(){
   const n = Math.floor(num(val('n'))), pr = num(val('p')); if(n<1 || pr<0) return;
-  if(n>availNow() && !(await ask(`Der Überschuss beträgt nur ${availNow()} Eier. Möchtest du trotzdem ${n} eintragen?`, {title:'Mehr als der Überschuss', ok:'Trotzdem eintragen'}))) return;
-  const p = P(), f = val('f'), txId = uid(), method = payPick, amount = Math.round(n*pr*100)/100; closeSheet();
+  if(n>availNow() && !(await ask(`Im Vorrat sind nur ${availNow()} Eier. Möchtest du trotzdem ${n} eintragen?`, {title:'Nicht genug Eier im Vorrat', ok:'Trotzdem eintragen'}))) return;
+  const p = P(), f = val('f'), txId = uid(), method = payPick, amount = Math.round(n*pr*100)/100, dt = zusatzDate || today(); closeSheet();
   run(async () => {
-    await ok(await sb.from('transactions').insert({id:txId, project_id:p.id, date:today(), kind:'einnahme', amount, description:`Zusatz: ${n} Eier (${fam(f).name})`, family_id:null, seller_id:f, pay_method:method, pay_state: method === 'bar' ? 'bar_offen' : 'pruefen'}));
-    await ok(await sb.from('egg_log').insert({project_id:p.id, date:today(), type:'zusatz', n, price:pr, family_id:f, tx_id:txId}));
+    await ok(await sb.from('transactions').insert({id:txId, project_id:p.id, date:dt, kind:'einnahme', amount, description:`Zusatz: ${n} Eier (${fam(f).name})`, family_id:null, seller_id:f, pay_method:method, pay_state: method === 'bar' ? 'bar_offen' : 'pruefen'}));
+    await ok(await sb.from('egg_log').insert({project_id:p.id, date:dt, type:'zusatz', n, price:pr, family_id:f, tx_id:txId}));
   }, `${eur(amount)} in die Gemeinschaftskasse`).then(done => {
     if(done) offerPayPal({amount, buyer: fam(f).name, purpose: `${n} Zusatz-Ei${n===1?'':'er'}`, mode: 'self', txId, method});
   });
@@ -944,21 +956,20 @@ function sheetTake(fid, n, d0){
   openSheet(d0 ? 'Entnahme nachtragen' : 'Eier entnehmen', `<label>Wer nimmt Eier?</label><select id="f">${famOptions(fid)}</select>
     <label>Anzahl</label>${stepper('n', n||6, 1)}
     <label>Datum</label><input id="d" type="date" value="${d0||today()}" min="${takeMin()}" max="${today()}">
-    <p class="muted" style="margin:6px 0 0">Für die Vorwoche einfach ein Datum aus dieser Woche wählen. Die Eier zählen dann zum Anspruch dieser Woche.</p>` + actions('doTake()'));
+    <p class="muted" style="margin:6px 0 0">Die ersten ${quota()} Eier pro Woche sind frei, für weitere zahlt die Familie den internen Preis. Für die Vorwoche wähle ein Datum aus dieser Woche.</p>` + actions('doTake()'));
 }
 async function doTake(){
   const n=Math.floor(num(val('n'))), date = val('d') || today(), f = val('f'); if(n<1) return;
   if(date > today() || date < takeMin()){ toast(`Datum geht nur von ${fmtDay(parseD(takeMin()))} bis heute.`); return; }
-  if(date === today()){
-    if(n>stock() && !(await ask(`Im Vorrat sind nur ${stock()} Eier. Möchtest du trotzdem ${n} eintragen?`, {title:'Nicht genug Eier im Vorrat', ok:'Trotzdem eintragen'}))) return;
-  } else {
-    const m = monday(parseD(date)), w = weekStats(m), left = Math.max(0, quota() - (w.waived[f]||0) - (w.taken[f]||0));
-    if(P().members.includes(f) && n > left && !(await ask(`${fam(f).name} hat in KW ${isoWeek(m)} nur noch ${left} Ei${left===1?'':'er'} Anspruch offen. Trotzdem ${n} eintragen?`, {title:'Mehr als der Anspruch', ok:'Trotzdem eintragen'}))) return;
-  }
-  const p = P(), id = uid(); closeSheet();
-  const when = date === today() ? '' : ` (${fmtDay(parseD(date))})`;
-  run(async () => ok(await sb.from('egg_log').insert({id, project_id:p.id, date, type:'take', n, family_id:f})))
-    .then(done => { if(done) toastUndo(`${fam(f).name}: ${n} Ei${n===1?'':'er'} entnommen${when}`, async () => ok(await sb.from('egg_log').delete().eq('id', id))); });
+  if(date === today() && n>stock() && !(await ask(`Im Vorrat sind nur ${stock()} Eier. Möchtest du trotzdem ${n} eintragen?`, {title:'Nicht genug Eier im Vorrat', ok:'Trotzdem eintragen'}))) return;
+  const m = monday(parseD(date)), w = weekStats(m), free = Math.max(0, quota() - (w.taken[f]||0)), nFree = Math.min(n, free), nPaid = n - nFree, pr = internPrice();
+  const eggs = k => `${k} Ei${k===1?'':'er'}`;
+  if(nPaid > 0 && !(await ask(`${fam(f).name} hat in KW ${isoWeek(m)} ${nFree>0 ? `noch ${eggs(nFree)} frei. ` : `schon ${quota()} freie Eier genommen. `}Für ${eggs(nPaid)} zahlt die Familie je ${eur(pr)}, zusammen ${eur(Math.round(nPaid*pr*100)/100)} in die Gemeinschaftskasse.`, {title:'Mehr als die freien Eier', ok:'Weiter zur Bezahlung'}))) return;
+  const p = P(), id = uid(), when = date === today() ? '' : ` (${fmtDay(parseD(date))})`; closeSheet();
+  const pay = () => sheetZusatz(f, nPaid, date === today() ? null : date);
+  if(nFree < 1){ pay(); return; }
+  run(async () => ok(await sb.from('egg_log').insert({id, project_id:p.id, date, type:'take', n:nFree, family_id:f})))
+    .then(done => { if(!done) return; if(nPaid > 0) pay(); else toastUndo(`${fam(f).name}: ${eggs(nFree)} entnommen${when}`, async () => ok(await sb.from('egg_log').delete().eq('id', id))); });
 }
 let saleGiven = false;   // Verkauf direkt nach „Aus meinem Anspruch abgeben“: ohne Dienst-Rückfrage
 function sheetSale(oid, seller, n){
@@ -2371,19 +2382,19 @@ function manualCard(){
         <li>Tippe aufs <b>große Ei</b>: Jedes Tippen zählt ein Ei mehr für heute und wird mit deinem Namen und der Uhrzeit im Verlauf festgehalten. Mit <b>−1 korrigieren</b> nimmst du das zuletzt gezählte Ei zurück.</li>
         <li><b>Jede Familie</b> darf zählen, auch ohne Dienst. Zählt oder verkauft eine Familie, die diese Woche keinen Dienst hat, zeigt die App einmal pro Tag ein kleines Fenster „Familie X hat Dienst“ und fragt, ob du trotzdem zählen möchtest. Es bleibt erlaubt, ihr merkt es nur.</li>
         <li>Rechts unter dem Ei steht, wie viele Eier <b>diese Woche</b> gelegt wurden. Links oben siehst du, wer <b>diese Woche Dienst</b> hat. Ein gelber Rahmen heißt: deine Familie.</li>
-        <li>Vergessen? Tippe unter „Vorrat &amp; Überschuss“ auf <b>Eier nachtragen</b> und wähle Datum und Anzahl.</li></ul>`),
-      manDet('vorrat', 'Vorrat, Überschuss und Zusatz-Eier', `<ul>
+        <li>Vergessen? Tippe unter „Vorrat &amp; Verkauf“ auf <b>Eier nachtragen</b> und wähle Datum und Anzahl.</li></ul>`),
+      manDet('vorrat', 'Vorrat, Verkauf und Zusatz-Eier', `<ul>
         <li><b>Vorrat</b> sind die gelegten Eier abzüglich der genommenen und verkauften (gezählt ab Live-Start).</li>
-        <li><b>Überschuss</b> (Verkaufsbestand) sind die Eier über dem Wochenanspruch der Familien. Was in einer Woche nicht verkauft wird, bleibt als <b>Übertrag</b> im Verkaufsbestand und ist in der nächsten Woche sofort wieder verkäuflich. Die älteren Eier verkauft ihr zuerst.</li>
+        <li><b>zum Verkauf</b> ist der ganze Vorrat: Es wird nichts mehr für die Familien zurückgelegt, wer zuerst kommt, bekommt die Eier. Nicht Verkauftes bleibt als <b>Übertrag</b> im Vorrat. Die älteren Eier verkauft ihr zuerst.</li>
+        <li>Die <b>Prognose bis Sonntag</b> unter dem Vorrat ist nur eine Schätzung aus den letzten 14 Tagen. Sie zeigt, ob die Eier voraussichtlich für die freien Eier der Familien und die bestellten Eier reichen. Sie sperrt nichts.</li>
         <li><b>Zusatz nehmen:</b> Eine Familie nimmt zusätzliche Eier zum internen Preis. Der Betrag geht in die Gemeinschaftskasse. Wähle, ob <b>Bar</b> oder per <b>PayPal</b> bezahlt wird. Danach erscheint die Bezahlung: Mit <b>PayPal öffnen</b> zahlt die Familie den Betrag ein, mit <b>Später</b> schließt ihr das Fenster. Der Eingang wird in der Kasse kontrolliert (siehe „Zahlungen kontrollieren“).</li>
         <li><b>An Nachbarn verkaufen:</b> Käufer, Anzahl und externer Preis eintragen, dazu <b>Verkauft von</b> (welche Familie verkauft) und ob <b>Bar</b> oder per <b>PayPal</b> bezahlt wird. Das Geld geht in die Gemeinschaftskasse. Danach erscheint die PayPal-Bezahlung mit QR-Code: Der Nachbar kann scannen oder den Link per <b>Per WhatsApp senden</b> bekommen. Hast du Bargeld erhalten, zahlst du es mit <b>PayPal öffnen</b> in die Gemeinschaftskasse ein.</li>
-        <li>Ist kein Überschuss da, sind beide Knöpfe gesperrt.</li></ul>`),
+        <li>Ist nichts im Vorrat, sind beide Knöpfe gesperrt.</li></ul>`),
       manDet('bestell', 'Bestellungen von Nachbarn', `<ul>
         <li>Auf der Nachbar-Seite (Link aus dem Tab <b>Hof</b>) können Nachbarn <b>Eier bestellen</b>. Sie tragen ihre Familie und die Stückzahl ein (bis 30). Ist gerade nicht genug frei, kommen sie auf die <b>Warteliste</b>.</li>
         <li>Neue Bestellungen erscheinen im Tab <b>Eier</b> in der Karte <b>Bestellungen von Nachbarn</b>. Am Reiter <b>Eier</b> zeigt ein roter Punkt mit Zahl, wie viele offen sind. Zieh zum Aktualisieren nach unten, wenn du sie gleich sehen willst.</li>
         <li>Bestellte Eier gelten als reserviert. Auf der Nachbar-Seite steht dadurch weniger „verfügbar“.</li>
-        <li><b>Warteliste:</b> Bestellungen werden der Reihe nach bedient. Passt eine in den Überschuss, steht <b>bereit</b> daneben, sonst „wartet · Platz n“. Kommt eine Bestellung auf die Warteliste, bekommen alle Familien eine Nachricht. Wird sie später bereit, bekommt die Familie mit Dienst Bescheid. Nach 7 Tagen verfällt eine wartende Bestellung, der Nachbar sieht das auf seiner Seite.</li>
-        <li><b>Aus meinem Anspruch abgeben:</b> Hast du von deinen Eiern dieser Woche welche übrig, tippe bei der wartenden Bestellung darauf. Wähle die Familie, die Anzahl und ob die Eier <b>Noch im Stall</b> liegen oder <b>Schon bei uns</b> sind. Die App verringert euren Anspruch (und, wenn schon geholt, eure Entnahme) und öffnet dann den Verkauf. Das Geld geht in die Gemeinschaftskasse.</li>
+        <li><b>Warteliste:</b> Bestellungen werden der Reihe nach bedient. Passt eine in den Vorrat, steht <b>bereit</b> daneben, sonst „wartet · Platz n“. Kommt eine Bestellung auf die Warteliste, bekommen alle Familien eine Nachricht. Wird sie später bereit, bekommt die Familie mit Dienst Bescheid. Nach 7 Tagen verfällt eine wartende Bestellung, der Nachbar sieht das auf seiner Seite.</li>
         <li><b>Verkauft:</b> Tippe darauf, wenn du die Eier ausgibst. Name und Anzahl sind schon eingetragen, der Preis ist der externe. Nach dem Speichern ist die Bestellung erledigt und das Geld in der Kasse.</li>
         <li><b>✕</b> lehnt eine Bestellung ab. Die Eier sind dann wieder frei. Erledigte und abgelehnte Bestellungen stehen unter „Erledigt“. Dort löschst du sie mit <b>✕</b>, zum Beispiel Testbestellungen.</li></ul>`),
       manDet('zahlkontrolle', 'Zahlungen kontrollieren, Trinkgeld und Kassenabgleich', `<ul>
@@ -2410,11 +2421,10 @@ function manualCard(){
         <li><b>Erinnerungen:</b> Um 18 Uhr schickt der Hof eine Nachricht, wenn etwas ansteht: am Sonntag „Nächste Woche hast du Dienst“, dazu Bargeld, das seit einer Woche nicht eingezahlt ist, PayPal-Eingänge, die seit drei Tagen auf Bestätigung warten, am 1. des Monats (nur an den Admin) Abgleich und Sicherung, und sonntags ein kurzer Wochenrückblick (gelegt, an Familien, verkauft, eingenommen). Ein Tipp auf die Nachricht öffnet die passende Seite. In der Karte „Benachrichtigungen“ schaltest du die Erinnerungen auf diesem Gerät mit <b>Ausschalten</b> ab, die Bestell-Nachrichten bleiben davon unberührt.</li>
         <li><b>iPhone:</b> Das geht nur ab iOS 16.4 und nur, wenn die App auf dem Home-Bildschirm liegt (Teilen-Symbol, „Zum Home-Bildschirm“). Öffne die App dann von dort.</li>
         <li>Nach dem <b>Abmelden</b> kommen auf diesem Handy keine Nachrichten mehr. Beim nächsten Anmelden mit derselben Familie sind sie wieder aktiv.</li></ul>`),
-      manDet('anspruch', 'Wochenanspruch, Entnehmen und Verzichten', `<ul>
-        <li>In der Karte <b>Diese Woche</b> hat jede Familie Anspruch auf <b>${q} Eier</b> pro Woche. Die kleinen Eier zeigen, wie viele sie schon genommen hat: gefüllt = genommen, leer = noch offen.</li>
-        <li><b>Entnehmen:</b> trägt ein, dass die Familie ihre Eier abholt. Die Menge ist mit dem Rest vorausgefüllt.</li>
-        <li><b>Verzichten:</b> Die Familie nimmt weniger oder gar nichts. Gib ein, wie viele Eier sie diese Woche nimmt, von 0 bis ${q}. Der Rest wird sofort Überschuss. Das gilt nur für diese Woche, nächste Woche gelten wieder ${q}. Mit <b>Menge ändern</b> nimmst du es zurück.</li>
-        <li>Nimmt eine Familie mehr als ihren Anspruch, steht dort <b>+n Zusatz</b>.</li>
+      manDet('anspruch', 'Freie Eier und Entnehmen', `<ul>
+        <li>In der Karte <b>Diese Woche</b> sind für jede Familie die ersten <b>${q} Eier</b> pro Woche frei. Die kleinen Eier zeigen, wie viele sie schon genommen hat: gefüllt = genommen, leer = noch frei. Die Eier werden nicht zurückgelegt.</li>
+        <li><b>Entnehmen:</b> trägt ein, dass die Familie ihre Eier abholt. Die Menge ist mit dem Rest der freien Eier vorausgefüllt. Nimmt sie mehr als die freien Eier, fragt die App nach dem Preis: Für jedes weitere Ei zahlt die Familie den internen Preis in die Gemeinschaftskasse, danach öffnet sich die Bezahlung (wie bei <b>Zusatz nehmen</b>).</li>
+        <li>Bezahlte Eier über den freien Eiern stehen dort als <b>+n Zusatz</b>.</li>
         <li>Mit ◀ und ▶ oben in der Karte blätterst du in frühere Wochen. Dort siehst du, wer wann wie viele Eier genommen hat, und kannst jede Entnahme mit <b>Ändern</b> korrigieren oder mit ✕ löschen (ältere als 14 Tage nur der Admin). Vergessene Entnahmen trägst du dort bei der Familie mit <b>Entnahme nachtragen</b> ein (zählt für die Woche, die du gerade siehst). Beim Entnehmen kannst du auch selbst ein <b>Datum</b> wählen. <b>Zur laufenden Woche</b> bringt dich zurück.</li></ul>`),
       manDet('stat', 'Statistik', `<ul>
         <li><b>Tage:</b> die Woche als Säulen. Mit ‹ und › blätterst du zurück, ein Tipp auf eine Säule öffnet den Tag.</li>
@@ -2426,10 +2436,9 @@ function manualCard(){
         <li><b>Zeiten ändern:</b> neue Zeiten und eine Notiz (z. B. Sommerzeit) eintragen. Alle sehen die Änderung. Nach rund fünf Wochen ohne Änderung erinnert dich die App.</li></ul>`),
       kalender, kasse, fehler, protokoll, adminSec,
       manDet('faq', 'Häufige Fragen', `<ul>
-        <li><i>Eine Familie nimmt nur 6 Eier.</i> Tippe bei ihr auf <b>Verzichten</b> und trage 6 ein.</li>
-        <li><i>Eine Familie gibt nachträglich Eier aus der Vorwoche ab, die verkauft werden.</i> Blättere in <b>Diese Woche</b> mit ◀ zur Vorwoche, tippe bei ihrer Entnahme auf <b>Ändern</b> und setze die Anzahl herunter (zum Beispiel von 10 auf 5). Die Eier zählen dann wieder zum Überschuss, und du trägst sie mit <b>An Nachbarn verkaufen</b> ein.</li>
-        <li><i>Warum kann ich nichts verkaufen?</i> Es gibt gerade keinen Überschuss. Prüfe „Vorrat &amp; Überschuss“ und die Verzichte der Familien.</li>
-        <li><i>Im Winter legen die Hennen weniger.</i> Der Anspruch bleibt gleich. Die Karte <b>Diese Woche</b> zeigt dann „es fehlen noch …“. Ihr verteilt die Eier nach Absprache oder nutzt <b>Verzichten</b>.</li>
+        <li><i>Eine Familie gibt nachträglich Eier aus der Vorwoche ab, die verkauft werden.</i> Blättere in <b>Diese Woche</b> mit ◀ zur Vorwoche, tippe bei ihrer Entnahme auf <b>Ändern</b> und setze die Anzahl herunter (zum Beispiel von 10 auf 5). Die Eier sind dann wieder im Vorrat, und du trägst sie mit <b>An Nachbarn verkaufen</b> ein.</li>
+        <li><i>Warum kann ich nichts verkaufen?</i> Der Vorrat ist leer. Prüfe „Vorrat &amp; Verkauf“ und ob Entnahmen oder Verkäufe fehlerhaft eingetragen sind.</li>
+        <li><i>Im Winter legen die Hennen weniger.</i> Die freien ${q} Eier bleiben gleich, aber der Vorrat reicht dann nicht für alle. Die <b>Prognose bis Sonntag</b> zeigt, wie viele voraussichtlich fehlen. Ihr verteilt die Eier nach Absprache.</li>
         <li><i>Ein Nachbar fragt, ob Eier da sind.</i> Öffne den Tab <b>Hof</b>, tippe bei „Nachbar-Seite“ auf <b>Link für Nachbarn teilen</b> und schicke ihm den Link.</li>
         <li><i>Ein Nachbar will per PayPal zahlen.</i> Tippe in der Kasse auf <b>Zahlung per PayPal anfordern</b> und schicke ihm QR oder Link.</li>
         <li><i>Es erscheint „Fehler: …“.</i> Prüfe die Internetverbindung, zieh zum Aktualisieren nach unten und versuche es noch einmal. Hilft das nicht, mach einen Screenshot und melde ihn.</li></ul>`)
