@@ -1821,7 +1821,7 @@ async function delTx(id){
 /* ================= Link für Nachbarn (öffentliche Seite) ================= */
 const neighborUrl = () => CONFIG.site + '/nachbarn';
 function neighborMessage(){
-  return `Hallo! 🐔\nFrische Eier vom Rainäcker Hof 🥚\n\nHier siehst du jederzeit, wie viele Eier gerade da sind, was sie kosten und bei welcher Familie du sie diese Woche abholen kannst. Bestellen kannst du dort auch gleich:\n👉 ${neighborUrl()}\n\nLiebe Grüße vom Rainäcker Hof 💛`;
+  return `Hallo! 🐔\nFrische Eier vom Rainäcker Hof 🥚\n\nHier siehst du, was die Eier kosten, und kannst gleich bestellen. Wir liefern sie dir:\n👉 ${neighborUrl()}\n\nLiebe Grüße vom Rainäcker Hof 💛`;
 }
 function sheetNeighbors(){
   openSheet('Link für Nachbarn teilen', `
@@ -2367,7 +2367,7 @@ function manualCard(){
     <li>Der <b>Dienstplan der nächsten Wochen</b> ist eingeklappt. Dort tauschst du einzelne Wochen, mit <b>Weitere 8 Wochen</b> schaust du weiter voraus, und Admins können mit <b>Plan füllen</b> viele Wochen reihum eintragen.</li></ul>`);
   const protokoll = manDet('hof', 'Tab Hof und Einstellungen', `<ul>
     ${hens?`<li><b>Stall</b> (Tab Admin, Einstellungen): Hennenbestand (mit Datum, wenn sich die Zahl ändert), Eier pro Familie und Woche (jetzt ${q}), interner Preis (leer = Selbstkostenpreis) und externer Preis für Nachbarn.</li>
-    <li><b>Nachbar-Seite:</b> Hier erzeugst du mit <b>Link für Nachbarn teilen</b> eine WhatsApp-Nachricht mit dem Link zu einer öffentlichen Seite. Dort sehen Nachbarn ohne Anmeldung, wie viele Eier gerade übrig sind, den Preis und bei welcher Familie (mit Dienst) sie diese Woche Eier holen können. Nachbarn können dort auch Eier bestellen. Die Seite zeigt immer den aktuellen Stand, der Link muss nur einmal verschickt werden. Darüber trägst du einen Hinweis ein, z. B. Abholort oder Zeiten. Er erscheint auf der Seite.</li>`:''}
+    <li><b>Nachbar-Seite:</b> Hier erzeugst du mit <b>Link für Nachbarn teilen</b> eine WhatsApp-Nachricht mit dem Link zu einer öffentlichen Seite. Dort sehen Nachbarn ohne Anmeldung den Preis und können Eier bestellen. Wie viele Eier gerade da sind und wer Dienst hat, zeigt die Seite nicht, ihr liefert die Eier immer aus. Der Link muss nur einmal verschickt werden. Darüber trägst du einen Hinweis ein, z. B. Lieferzeiten. Er erscheint auf der Seite.</li>`:''}
     <li><b>Darstellung:</b> <b>Automatisch</b> folgt dem Handy (hell oder dunkel), mit <b>Hell</b> oder <b>Dunkel</b> legst du es für dieses Handy fest.</li>
     <li>Nur für den Admin sichtbar: der Tab <b>Admin</b> mit den eingeklappten <b>Einstellungen</b> (${hens?'Stall, ':''}Zahlung, Erfassung), <b>Familien</b> und <b>Daten</b>. In der Kasse sind auch <b>Kassenabgleich</b> und <b>Monatsbericht teilen</b> nur für den Admin.</li>
     <li><b>Zahlung:</b> PayPal.me-Name für den QR-Code.</li>
@@ -2393,7 +2393,7 @@ function manualCard(){
       manDet('bestell', 'Bestellungen von Nachbarn', `<ul>
         <li>Auf der Nachbar-Seite (Link aus dem Tab <b>Hof</b>) können Nachbarn <b>Eier bestellen</b>. Sie tragen ihre Familie und die Stückzahl ein (bis 30). Ist gerade nicht genug frei, kommen sie auf die <b>Warteliste</b>.</li>
         <li>Neue Bestellungen erscheinen im Tab <b>Eier</b> in der Karte <b>Bestellungen von Nachbarn</b>. Am Reiter <b>Eier</b> zeigt ein roter Punkt mit Zahl, wie viele offen sind. Zieh zum Aktualisieren nach unten, wenn du sie gleich sehen willst.</li>
-        <li>Bestellte Eier gelten als reserviert. Auf der Nachbar-Seite steht dadurch weniger „verfügbar“.</li>
+        <li>Bestellte Eier gelten als reserviert. Die Nachbar-Seite zeigt keine Eieranzahl und keine Abholung mehr, weil ihr die Eier immer ausliefert.</li>
         <li><b>Warteliste:</b> Bestellungen werden der Reihe nach bedient. Passt eine in den Vorrat, steht <b>bereit</b> daneben, sonst „wartet · Platz n“. Kommt eine Bestellung auf die Warteliste, bekommen alle Familien eine Nachricht. Wird sie später bereit, bekommt die Familie mit Dienst Bescheid. Nach 7 Tagen verfällt eine wartende Bestellung, der Nachbar sieht das auf seiner Seite.</li>
         <li><b>Verkauft:</b> Tippe darauf, wenn du die Eier ausgibst. Name und Anzahl sind schon eingetragen, der Preis ist der externe. Nach dem Speichern ist die Bestellung erledigt und das Geld in der Kasse.</li>
         <li><b>✕</b> lehnt eine Bestellung ab. Die Eier sind dann wieder frei. Erledigte und abgelehnte Bestellungen stehen unter „Erledigt“. Dort löschst du sie mit <b>✕</b>, zum Beispiel Testbestellungen.</li></ul>`),

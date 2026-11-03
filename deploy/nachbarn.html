@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Frische Eier – Rainäcker Hof</title>
-<meta name="description" content="Aktueller Eier-Bestand, Preis und Abholung beim Rainäcker Hof">
+<meta name="description" content="Eier bestellen beim Rainäcker Hof, wir liefern">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#263829">
 <meta property="og:type" content="website">
@@ -96,14 +96,14 @@ button:disabled{opacity:.5;cursor:default}
     <div><h1>Rainäcker Hof</h1><div class="sub">🐔 Frische Eier vom Hof</div></div>
   </header>
 
-  <section class="card hero" aria-live="polite">
+  <section class="card hero" id="hero" aria-live="polite" hidden>
     <div class="egg zero" id="egg"><span class="num" id="num">–</span><span class="unit" id="unit">Eier</span></div>
     <p class="state" id="state">Lade aktuellen Stand …</p>
   </section>
 
   <section class="card" id="details" hidden>
     <div class="row"><span>💰 Preis</span><strong id="price">–</strong></div>
-    <div class="row"><span>📍 Abholung bei</span><strong id="duty">–</strong></div>
+    <div class="row"><span>🚲 Lieferung</span><strong>Wir bringen die Eier zu dir</strong></div>
   </section>
 
   <section class="card note" id="notebox" hidden><h2><span class="hi" aria-hidden="true">📝</span>Hinweis</h2><div id="note"></div></section>
@@ -145,27 +145,20 @@ const eur = n => Number(n).toLocaleString('de-DE', {style:'currency', currency:'
 
 function show(d){
   const n = Math.max(0, Math.floor(Number(d.available) || 0));
-  const num = $('num');
-  num.textContent = n; $('egg').classList.toggle('zero', n === 0);
-  $('unit').textContent = n === 1 ? 'Ei' : 'Eier';
-  $('state').textContent = n > 0 ? (n === 1 ? 'ist gerade verfügbar.' : 'sind gerade verfügbar.') : 'Gerade sind keine Eier übrig. Schau später gern noch einmal vorbei.';
+  $('hero').hidden = true;   // verfügbare Eier werden nicht mehr gezeigt, der Hof liefert immer aus
   $('state').classList.remove('err');
   $('price').textContent = d.price !== null && d.price !== undefined ? eur(d.price) + ' pro Ei' : 'auf Anfrage';
-  const duty = d.duty ? (/^familie\s/i.test(d.duty) ? d.duty : 'Familie ' + d.duty) : 'bitte kurz nachfragen';
-  $('duty').textContent = duty;
   $('details').hidden = false;
   $('orderbox').hidden = false;
-  $('orderHint').textContent = n > 0
-    ? 'Deine Eier werden für dich zurückgelegt. Du holst sie bei der Familie ab, die oben steht. Bestellst du mehr als frei ist, kommst du auf die Warteliste.'
-    : 'Gerade sind keine Eier frei. Du kannst trotzdem bestellen und kommst auf die Warteliste. Sobald Eier für dich da sind, steht das hier unter „Deine Bestellungen“. Nach 7 Tagen verfällt die Bestellung.';
-  last = {n, duty};
+  $('orderHint').textContent = 'Wir liefern die Eier zu dir. Sind gerade nicht genug da, kommst du auf die Warteliste und siehst den Stand hier unter „Deine Bestellungen“. Nach 7 Tagen verfällt die Bestellung.';
+  last = {n};
   const note = (d.note || '').trim();
   $('notebox').hidden = !note; $('note').textContent = note;
   const t = d.updated ? new Date(d.updated) : new Date();
   $('stand').textContent = 'Stand: ' + t.toLocaleDateString('de-DE', {day:'numeric', month:'long'}) + ', ' + t.toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'}) + ' Uhr';
 }
 function fail(){
-  $('num').textContent = '–'; $('egg').classList.add('zero'); $('unit').textContent = '';
+  $('hero').hidden = false; $('egg').style.display = 'none';
   $('state').textContent = 'Der Stand konnte gerade nicht geladen werden. Bitte versuche es gleich noch einmal.';
   $('state').classList.add('err');
   $('details').hidden = true; $('notebox').hidden = true; $('orderbox').hidden = true; $('stand').textContent = '';
@@ -179,10 +172,9 @@ async function loadMine(){
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const rows = await r.json();
     if(!Array.isArray(rows) || !rows.length){ $('mine').hidden = true; return; }
-    const duty = last.duty ? (/^familie\s/i.test(last.duty) ? last.duty : 'Familie ' + last.duty) : 'der Familie mit Dienst';
-    const txt = o => o.status === 'bereit' ? 'liegt bereit, abholen bei ' + duty
+    const txt = o => o.status === 'bereit' ? 'wir liefern bald'
       : o.status === 'wartet' ? 'auf der Warteliste' + (o.pos ? ', Platz ' + o.pos : '')
-      : o.status === 'erledigt' ? 'abgeholt, danke!' : o.status === 'abgelehnt' ? 'leider abgelehnt' : 'verfallen (nach 7 Tagen)';
+      : o.status === 'erledigt' ? 'geliefert, danke!' : o.status === 'abgelehnt' ? 'leider abgelehnt' : 'verfallen (nach 7 Tagen)';
     $('mineList').innerHTML = rows.map(o => `<div class="row"><span>${o.qty} ${o.qty === 1 ? 'Ei' : 'Eier'} · ${new Date(o.created).toLocaleDateString('de-DE', {day:'numeric', month:'short'})}</span><strong>${txt(o)}</strong></div>`).join('');
     $('mine').hidden = false;
   }catch(e){ console.error(e); }
@@ -213,10 +205,9 @@ async function order(ev){
       store.set(who); say('', true);
       if(res.id) myOrders.set([...myOrders.get(), {id: res.id, t: Date.now()}]);
       $('thanksTitle').textContent = 'Danke, ' + who + '!';
-      const duty = last.duty ? (/^familie\s/i.test(last.duty) ? last.duty : 'Familie ' + last.duty) : 'der Familie mit Dienst';
       $('thanksText').textContent = res.waiting
-        ? 'Gerade sind nicht genug Eier frei. Du stehst auf Platz ' + (res.pos || 1) + ' der Warteliste. Sobald Eier für dich da sind, steht das hier unter „Deine Bestellungen“.'
-        : qty + (qty === 1 ? ' Ei ist' : ' Eier sind') + ' für dich zurückgelegt. Du kannst sie bei ' + duty + ' abholen.';
+        ? 'Gerade sind nicht genug Eier da. Du stehst auf Platz ' + (res.pos || 1) + ' der Warteliste. Sobald Eier für dich da sind, steht das hier unter „Deine Bestellungen“. Wir liefern sie dir dann.'
+        : qty + (qty === 1 ? ' Ei ist' : ' Eier sind') + ' für dich zurückgelegt. Wir liefern sie dir.';
       $('thanks').hidden = false; $('thanks').scrollIntoView({behavior:'smooth', block:'center'});
       await load();
     } else {
