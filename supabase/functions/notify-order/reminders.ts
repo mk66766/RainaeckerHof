@@ -11,7 +11,7 @@ export type Data = {
   eggs?: { project_id: string; date: string; type: string; n: number; price: number | string | null }[];   // Eier der laufenden Woche (nur sonntags geladen)
 };
 export type Now = { date: string; weekday: number; day: number };       // Berlin: Datum JJJJ-MM-TT, Wochentag 0=Sonntag, Tag im Monat
-export type Item = { userId: string; title: string; text: string; url: string; prio: number };
+export type Item = { userId: string; title: string; text: string; url: string; prio: number; kind: string };   // kind: duty | cash | pay_check | month (Admin-Tab „Wer bekommt was?“)
 
 export const eur = (n: number) => n.toFixed(2).replace(".", ",") + " €";
 const dayNum = (d: string) => Math.floor(Date.parse(d.slice(0, 10) + "T12:00:00Z") / 864e5);
@@ -33,7 +33,7 @@ export function buildReminders(d: Data, now: Now): Item[] {
     for (const p of d.projects) {
       const sw = d.swaps.find((s) => s.project_id === p.id && s.week_start === nextMon);
       const uid = sw && uidOf(sw.family_id);
-      if (uid) items.push({ userId: uid, title: "Nächste Woche hast du Dienst", text: `${label(p)}: Ab morgen bist du dran.`, url: `#dienst:${p.kind}`, prio: 2 });
+      if (uid) items.push({ userId: uid, title: "Nächste Woche hast du Dienst", text: `${label(p)}: Ab morgen bist du dran.`, url: `#dienst:${p.kind}`, prio: 2, kind: "duty" });
     }
   }
 
@@ -51,7 +51,7 @@ export function buildReminders(d: Data, now: Now): Item[] {
       if (n("sale")) parts.push(`${n("sale")} verkauft`);
       if (n("zusatz")) parts.push(`${n("zusatz")} Zusatz-Eier`);
       const text = `Diese Woche: ${parts.join(", ")}${money > 0 ? `, ${eur(money)} eingenommen` : ""}.`;
-      for (const uid of membersOf(p.id)) items.push({ userId: uid, title: "Wochenrückblick", text, url: `#eier`, prio: 3 });
+      for (const uid of membersOf(p.id)) items.push({ userId: uid, title: "Wochenrückblick", text, url: `#eier`, prio: 3, kind: "duty" });
     }
   }
 
@@ -65,7 +65,7 @@ export function buildReminders(d: Data, now: Now): Item[] {
     const uid = uidOf(fid);
     if (!uid) continue;
     const oldest = Math.max(...late.map((t) => ageDays(t.date, now.date)));
-    items.push({ userId: uid, title: "Bargeld noch einzahlen", text: `Du hast noch ${eur(late.reduce((s, t) => s + total(t), 0))} Bargeld aus Eierverkäufen einzuzahlen (seit ${oldest} Tagen).`, url: `#kasse:${kindOf(late[0].project_id)}`, prio: 1 });
+    items.push({ userId: uid, title: "Bargeld noch einzahlen", text: `Du hast noch ${eur(late.reduce((s, t) => s + total(t), 0))} Bargeld aus Eierverkäufen einzuzahlen (seit ${oldest} Tagen).`, url: `#kasse:${kindOf(late[0].project_id)}`, prio: 1, kind: "cash" });
   }
 
   // 3) PayPal-Eingang noch nicht bestätigt: ab 3 Tagen, dann alle 3 Tage, an die Admins (nur sie haben Zugriff auf das PayPal-Konto)
@@ -73,7 +73,7 @@ export function buildReminders(d: Data, now: Now): Item[] {
     const pend = d.tx.filter((t) => t.project_id === p.id && !t.parent_id && t.pay_state === "pruefen" && ageDays(t.date, now.date) >= 3);
     if (!pend.some((t) => (ageDays(t.date, now.date) - 3) % 3 === 0)) continue;
     const text = `${pend.length === 1 ? "1 PayPal-Eingang" : pend.length + " PayPal-Eingänge"} (${eur(pend.reduce((s, t) => s + total(t), 0))}) ${pend.length === 1 ? "ist" : "sind"} noch nicht bestätigt${d.projects.length > 1 ? ` (${label(p)})` : ""}.`;
-    for (const uid of adminsOf(p.id)) items.push({ userId: uid, title: "Zahlung prüfen", text, url: `#kasse:${p.kind}`, prio: 1 });
+    for (const uid of adminsOf(p.id)) items.push({ userId: uid, title: "Zahlung prüfen", text, url: `#kasse:${p.kind}`, prio: 1, kind: "pay_check" });
   }
 
   // 4) Monatsabschluss: am 1. des Monats, wenn Abgleich oder Sicherung länger als 28 Tage her sind (nur an Admins, die dürfen beides)
@@ -84,7 +84,7 @@ export function buildReminders(d: Data, now: Now): Item[] {
       if (!last || ageDays(last, now.date) > 28) lines.push(`Kassenabgleich (${label(p)}): Zeit für den monatlichen Abgleich.`);
       const bk = p.settings?.last_backup as string | undefined;
       if (!bk || ageDays(bk, now.date) > 28) lines.push(`Sicherung (${label(p)}): Zeit, die Daten zu sichern (Tab Admin).`);
-      for (const uid of adminsOf(p.id)) for (const text of lines) items.push({ userId: uid, title: "Monatsabschluss", text, url: `#kasse:${p.kind}`, prio: 3 });
+      for (const uid of adminsOf(p.id)) for (const text of lines) items.push({ userId: uid, title: "Monatsabschluss", text, url: `#kasse:${p.kind}`, prio: 3, kind: "month" });
     }
   }
   return items;

@@ -1,10 +1,10 @@
 import { makeHandler } from "./handler.ts";
 
 type Row = Record<string, any>;
-function fakeAdmin(db: { cfg?: Row[]; orders?: Row[]; members?: Row[]; subs?: Row[]; users?: Record<string, string>; cfgError?: boolean; ready?: Row[] | null }) {
+function fakeAdmin(db: { prefs?: Row[]; fams?: Row[]; cfg?: Row[]; orders?: Row[]; members?: Row[]; subs?: Row[]; users?: Record<string, string>; cfgError?: boolean; ready?: Row[] | null }) {
   const deleted: string[] = [];
   const from = (t: string) => {
-    let rows: Row[] = t === "push_config" ? (db.cfg ?? []) : t === "egg_orders" ? (db.orders ?? []) : t === "project_members" ? (db.members ?? []) : (db.subs ?? []);
+    let rows: Row[] = t === "push_config" ? (db.cfg ?? []) : t === "egg_orders" ? (db.orders ?? []) : t === "project_members" ? (db.members ?? []) : t === "push_prefs" ? (db.prefs ?? []) : t === "families" ? (db.fams ?? []) : (db.subs ?? []);
     const q: any = {
       select: () => q,
       eq: (c: string, v: any) => { rows = rows.filter(r => r[c] === v); return q; },
@@ -64,6 +64,13 @@ eq(x.w.calls.map((c: any) => c.sub.endpoint).sort(), ["https://push/a", "https:/
 eq(x.w.calls[0].payload, { title: "Neue Bestellung", body: "Familie Meier: 6 Eier", url: "https://example.test/#bestellungen", tag: "bestellung-o1" }, "Nachrichtentext mit Name, Menge und Link");
 eq(x.w.calls[0].opts, { TTL: 86400, urgency: "high" }, "Zustell-Optionen (24 h gültig, dringend)");
 eq(x.w.details[0], ["https://example.test", "PUB", "PRIV"], "Absender-Angaben (VAPID) übergeben");
+const FAMS = [{ id: "fa", user_id: "uA" }, { id: "fb", user_id: "uB" }, { id: "fc", user_id: "uC" }];
+x = await run({ ...base, fams: FAMS, prefs: [{ family_id: "fa", kind: "order_new", enabled: false }] }, post({ order_id: "o1" }, { "x-hook-secret": "geheim123" }));
+eq(x.w.calls.map((c: any) => c.sub.endpoint).sort(), ["https://push/b", "https://push/b2"], "neue Bestellung: Familie A hat sie im Admin-Tab ausgeschaltet, nur B bekommt sie");
+x = await run({ ...base, fams: FAMS, prefs: [{ family_id: "fa", kind: "order_ready", enabled: false }] }, post({ order_id: "o1" }, { "x-hook-secret": "geheim123" }));
+eq(x.w.calls.length, 3, "andere Art ausgeschaltet: neue Bestellung geht an alle");
+x = await run({ ...base, fams: FAMS, ready: [{ id: "o3", project_id: "p1", buyer: "Volkert", qty: 4, duty_user: "uA" }], prefs: [{ family_id: "fa", kind: "order_ready", enabled: false }] }, post({ queue: true }, { "x-hook-secret": "geheim123" }));
+eq([x.j.orders, x.w.calls.length], [1, 0], "Bestellung kann raus: Familie mit Dienst hat es ausgeschaltet, nichts gesendet");
 x = await run(base, post({ order_id: "o2" }, { "x-hook-secret": "geheim123" }));
 eq(x.w.calls[0].payload.body, "Familie Huber: 1 Ei", "Einzahl: „1 Ei“");
 x = await run(base, post({ order_id: "gibtsnicht" }, { "x-hook-secret": "geheim123" }));

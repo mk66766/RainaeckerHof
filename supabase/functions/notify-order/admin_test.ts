@@ -26,7 +26,8 @@ function wp() {
   const calls: any[] = [];
   return { calls, setVapidDetails() {}, async sendNotification(sub: any, payload: string) { calls.push({ ep: sub.endpoint, p: JSON.parse(payload) }); return {}; } };
 }
-const db = () => fakeDb({
+const db = (prefs: Row[] = []) => fakeDb({
+  push_prefs: prefs,
   push_config: [{ key: "vapid_public", value: "PUB" }, { key: "vapid_private", value: "PRIV" }, { key: "hook_secret", value: "geheim" }, { key: "site_url", value: "https://hof.test" }],
   families: [
     { id: "fAdm", name: "Admin", user_id: "uAdm", is_admin: true, left_on: null },
@@ -47,8 +48,8 @@ const db = () => fakeDb({
 });
 const post = (body: any, h: Record<string, string> = {}) => new Request("https://x/fn", { method: "POST", headers: { "content-type": "application/json", ...h }, body: JSON.stringify(body) });
 const eq = (a: any, b: any, msg: string) => { if (JSON.stringify(a) !== JSON.stringify(b)) { console.log("FEHLER:", msg, "| erwartet", JSON.stringify(b), "| war", JSON.stringify(a)); Deno.exit(1); } console.log("OK  ", msg); };
-const run = async (body: any, h: Record<string, string> = {}, now = "2026-10-25T17:00:00Z") => {
-  const d = db(); const w = wp();
+const run = async (body: any, h: Record<string, string> = {}, now = "2026-10-25T17:00:00Z", prefs: Row[] = []) => {
+  const d = db(prefs); const w = wp();
   const r = await makeHandler({ admin: d, webpush: w as any, siteUrl: "https://fb.test", now: () => new Date(now) })(post(body, h));
   return { r, j: await r.json(), w, d };
 };
@@ -80,6 +81,12 @@ x = await run({ admin: "preview", date: "2026-10-24" }, ADM);
 eq(x.j.messages.length, 0, "Samstag: keine Dienst-Erinnerung");
 x = await run({ admin: "preview" }, FAM);
 eq(x.r.status, 403, "Vorschau nur für den Admin");
+x = await run({ admin: "preview", date: "2026-10-25" }, ADM, undefined, [{ family_id: "fB", kind: "duty", enabled: false }]);
+eq(x.j.messages.length, 0, "Dienst-Erinnerung für Stopfer im Admin-Tab ausgeschaltet: keine Nachricht");
+x = await run({ admin: "preview", date: "2026-10-25" }, ADM, undefined, [{ family_id: "fB", kind: "cash", enabled: false }]);
+eq(x.j.messages.length, 1, "andere Art ausgeschaltet: Dienst-Erinnerung kommt weiter");
+x = await run({ admin: "preview", date: "2026-10-25" }, ADM, undefined, [{ family_id: "fB", kind: "duty", enabled: true }]);
+eq(x.j.messages.length, 1, "Eintrag mit „an“ ändert nichts");
 x = await run({ admin: "unsinn" }, ADM);
 eq(x.r.status, 400, "unbekannte Admin-Aktion: 400");
 

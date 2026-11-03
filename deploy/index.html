@@ -2333,6 +2333,7 @@ function manualCard(){
   const adminSec = !S.admin ? '' : manDet('admin', 'Tab Admin (nur für den Admin)', `<ul>
     <li><b>Offen auf einen Blick:</b> für Hühner und Ziegen die PayPal-Eingänge zum Prüfen, Bargeld bei Familien, offene Bestellungen, letzter Kassenabgleich, letzte Sicherung und bis wann der Dienstplan eingetragen ist. Rot heißt überfällig. Mit <b>↻</b> lädst du neu.</li>
     <li><b>Familien im Blick:</b> je Familie, wann sie zuletzt in der App war, wann sie sich zuletzt mit dem Code angemeldet hat, wann sie zuletzt etwas eingetragen hat und auf wie vielen Handys Benachrichtigungen und Erinnerungen eingeschaltet sind.</li>
+    <li><b>Wer bekommt was?:</b> Tippe auf eine Familie und nimm den Haken bei einer Art von Benachrichtigung weg (neue Bestellung, Bestellung kann raus, Dienst und Wochenrückblick, Bargeld einzahlen, Zahlung prüfen, Monatsabschluss). Das gilt sofort für alle Handys der Familie. Hinweise und Nachrichten, die du selbst verschickst, kommen immer an.</li>
     <li><b>Hinweis an alle:</b> Text eingeben, optional ein Datum bei <b>Anzeigen bis</b>, dann <b>Veröffentlichen</b>. Er erscheint bei allen Familien des Projekts oben in der App und, wenn angehakt, als Benachrichtigung. <b>Entfernen</b> nimmt ihn zurück.</li>
     <li><b>Nachricht an eine Familie:</b> Familie wählen, Text eingeben, <b>Nachricht senden</b>. So prüfst du, ob Benachrichtigungen auf ihrem Handy ankommen.</li>
     <li><b>Erinnerungen:</b> ob der Zeitplan läuft und was die letzten Läufe um 18 Uhr verschickt haben. Mit <b>Vorschau anzeigen</b> siehst du für einen Tag, welche Erinnerungen rausgehen würden, mit <b>An mich senden</b> kommen sie nur auf dein Handy. Die Familien bekommen dabei nichts.</li>
@@ -2520,11 +2521,13 @@ function exportData(){
 }
 
 /* ================= Admin-Tab (nur für den Admin) ================= */
-let adm = {data:null, loading:false, err:'', prev:null, prevDate:'', prevBusy:false};
+let adm = {data:null, loading:false, err:'', prev:null, prevDate:'', prevBusy:false, prefs:null};
 async function loadAdmin(){
   adm.loading = true; adm.err = '';
   try{ adm.data = await ok(await sb.rpc('admin_overview')); }
   catch(e){ adm.err = e.message || String(e); }
+  try{ adm.prefs = await ok(await sb.from('push_prefs').select('family_id,kind,enabled')); }   // „Wer bekommt was?“, Tabelle gibt es erst nach dem Datenbank-Update
+  catch(e){ adm.prefs = null; }
   adm.loading = false;
   if(tab === 'admin') render();
 }
@@ -2552,7 +2555,7 @@ function vAdmin(){
   const wait = adm.err ? `<div class="card"><p class="neg" style="margin:0">Übersicht konnte nicht geladen werden: ${esc(adm.err)}</p><button class="alt small" style="margin-top:10px" onclick="adm.err='';render()">Noch einmal</button></div>`
     : !adm.data ? '<div class="card"><p class="muted" style="margin:0">Übersicht wird geladen …</p></div>' : '';
   return `${wait}
-  ${adm.data ? admOpenCard() + admFamCard() : ''}
+  ${adm.data ? admOpenCard() + admFamCard() + admPrefCard() : ''}
   ${admNoticeCard()}
   ${admMessageCard()}
   ${adm.data ? admReminderCard() : ''}
@@ -2605,6 +2608,36 @@ function admFamCard(){
     }).join('')}
     ${info('„Zuletzt in der App“: Die App erneuert die Anmeldung etwa stündlich, solange sie offen ist. Das zeigt ungefähr, wann die Familie die App zuletzt benutzt hat. „Letzte Anmeldung mit Code“ ist die Anmeldung mit dem 6-stelligen Code, danach bleibt man angemeldet. „Eingetragen“ zählt Eier, Buchungen und Änderungen in beiden Projekten. Benachrichtigungen: Geräte, auf denen die Familie sie eingeschaltet hat.')}
   </div>`;
+}
+
+/* Wer bekommt was? Schalter je Familie und Art der Benachrichtigung (Tabelle push_prefs, gelesen von notify-order) */
+const PUSH_KINDS = [
+  ['order_new', 'Neue Bestellung', 'sobald ein Nachbar bestellt'],
+  ['order_ready', 'Bestellung kann raus', 'an die Familie mit Dienst'],
+  ['duty', 'Dienst und Wochenrückblick', 'sonntags um 18 Uhr'],
+  ['cash', 'Bargeld einzahlen', 'ab 7 Tagen offen'],
+  ['pay_check', 'Zahlung prüfen', 'geht nur an Admins'],
+  ['month', 'Monatsabschluss', 'am 1., geht nur an Admins']
+];
+const prefOn = (fid, kind) => !(adm.prefs || []).some(x => x.family_id === fid && x.kind === kind && x.enabled === false);
+function admPrefCard(){
+  const fams = S.fams.filter(f => !f.left).sort((a,b) => (!!a.system - !!b.system) || a.name.localeCompare(b.name));
+  if(adm.prefs === null) return `<div class="card"><h2><span class="hi" aria-hidden="true">🔔</span>Wer bekommt was?</h2><p class="muted" style="margin:0">Diese Einstellung ist erst nach dem nächsten Datenbank-Update verfügbar.</p></div>`;
+  return `<div class="card list">
+    <h2><span class="hi" aria-hidden="true">🔔</span>Wer bekommt was?</h2>
+    <p class="muted" style="margin:0 0 4px">Haken = die Familie bekommt diese Nachricht. Die Schalter am Handy (Hof → Benachrichtigungen) gelten zusätzlich.</p>
+    ${fams.map(f => `<details class="item" style="display:block" ${adm.prefOpen === f.id ? 'open' : ''} ontoggle="if(this.open) adm.prefOpen='${f.id}'"><summary style="cursor:pointer;font-weight:600">${esc(f.name)}${f.system ? ' <span class="muted">(Admin-Konto)</span>' : ''} <span class="muted" style="font-weight:400">· ${PUSH_KINDS.filter(k => prefOn(f.id, k[0])).length} von ${PUSH_KINDS.length} an</span></summary>
+      ${PUSH_KINDS.map(k => `<label style="display:flex;align-items:center;gap:10px;margin-top:10px;font-size:16px"><input type="checkbox" ${prefOn(f.id, k[0]) ? 'checked' : ''} onchange="admPrefSet('${f.id}','${k[0]}',this.checked)" style="width:auto;margin:0"><span>${k[1]} <span class="muted" style="font-size:14px">· ${k[2]}</span></span></label>`).join('')}
+    </details>`).join('')}
+    ${info('Gilt für alle Geräte der Familie. Hinweise und Nachrichten, die du im Tab Admin selbst verschickst, kommen immer an. „Zahlung prüfen“ und „Monatsabschluss“ bekommen ohnehin nur Admins.')}
+  </div>`;
+}
+async function admPrefSet(fid, kind, on){
+  const old = adm.prefs || [];
+  adm.prefs = [...old.filter(x => !(x.family_id === fid && x.kind === kind)), {family_id:fid, kind, enabled:on}];
+  try{ await ok(await sb.from('push_prefs').upsert({family_id:fid, kind, enabled:on, updated_at:new Date().toISOString()}, {onConflict:'family_id,kind'})); toast(on ? 'Eingeschaltet' : 'Ausgeschaltet'); }
+  catch(e){ adm.prefs = old; toast('Fehler: ' + (e.message || e)); }
+  render();
 }
 
 /* Erinnerungen: Zeitplan, letzte Läufe, Vorschau */

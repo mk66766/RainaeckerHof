@@ -55,7 +55,8 @@ export function makeHandler(d: Deps) {
       const { data: o } = await d.admin.from("egg_orders").select("id,project_id,buyer,qty,status,waited").eq("id", id).maybeSingle();
       if (!o) return json({ error: "Bestellung nicht gefunden" }, 404);
       const { data: mem } = await d.admin.from("project_members").select("family_id, families(user_id)").eq("project_id", o.project_id);
-      userIds = (mem || []).map((m: any) => m.families?.user_id).filter(Boolean);
+      const offOrder = await usersOff(d, "order_new");
+      userIds = (mem || []).map((m: any) => m.families?.user_id).filter((u: any) => u && !offOrder.has(u));
       const eier = `${o.qty} ${o.qty === 1 ? "Ei" : "Eier"}`;
       payload = o.waited ? {
         title: "Bestellung wartet",
@@ -87,17 +88,31 @@ export function makeHandler(d: Deps) {
 
 type Payload = { title: string; body: string; url: string; tag: string };
 
+// Nutzer, deren Familie eine Art von Nachricht im Admin-Tab („Wer bekommt was?“) ausgeschaltet hat.
+// Arten: order_new, order_ready, duty, cash, pay_check, month. Bei einem Lesefehler gilt „nichts ausgeschaltet“.
+async function usersOff(d: Deps, kind: string): Promise<Set<string>> {
+  try {
+    const { data: p } = await d.admin.from("push_prefs").select("family_id").eq("kind", kind).eq("enabled", false);
+    const ids = (p || []).map((r: any) => r.family_id);
+    if (!ids.length) return new Set();
+    const { data: f } = await d.admin.from("families").select("id,user_id").in("id", ids);
+    return new Set((f || []).map((r: any) => r.user_id).filter(Boolean));
+  } catch { return new Set(); }
+}
+
 // Warteliste: Bestellungen, die jetzt in den Überschuss passen, an die Familie mit Dienst (ohne Dienst: an alle des Projekts)
 async function sendQueue(d: Deps, cfg: Record<string, string>, site: string): Promise<Response> {
   const { data: ready, error } = await d.admin.rpc("take_ready_orders");
   if (error) return json({ error: "Warteliste nicht lesbar" }, 500);
   const res = { orders: (ready || []).length, sent: 0 };
+  const off = await usersOff(d, "order_ready");
   for (const o of ready || []) {
     let users: string[] = o.duty_user ? [o.duty_user] : [];
     if (!users.length) {
       const { data: mem } = await d.admin.from("project_members").select("family_id, families(user_id)").eq("project_id", o.project_id);
       users = (mem || []).map((m: any) => m.families?.user_id).filter(Boolean);
     }
+    users = users.filter((u) => !off.has(u));
     const p: Payload = { title: "Bestellung kann raus", body: `Für ${o.buyer} ${o.qty === 1 ? "ist jetzt 1 Ei" : `sind jetzt ${o.qty} Eier`} frei.`, url: `${site}/#bestellungen`, tag: `bestellung-${o.id}` };
     try { res.sent += (await sendTo(d, cfg, site, users, () => p, { TTL: 86400, urgency: "high" })).sent; } catch { /* nächste Bestellung trotzdem */ }
   }
@@ -171,8 +186,10 @@ async function collectReminders(d: Deps, now: Now) {
   const kids = parents.length ? (await a.from("transactions").select("id,project_id,date,amount,pay_state,seller_id,parent_id").in("parent_id", parents.map((t: any) => t.id))).data || [] : [];
   // sonntags die Eier der Woche für den Wochenrückblick
   const eggs = now.weekday === 0 ? (await a.from("egg_log").select("project_id,date,type,n,price").gte("date", new Date(Date.parse(now.date + "T12:00:00Z") - 6 * 864e5).toISOString().slice(0, 10)).lte("date", now.date)).data || [] : [];
+  const offBy: Record<string, Set<string>> = {};
+  for (const k of ["duty", "cash", "pay_check", "month"]) offBy[k] = await usersOff(d, k);
   const items = buildReminders({ projects: pr.data || [], members: mem.data || [], families: fam.data || [], swaps: sw.data || [], tx: [...parents, ...kids], checks: ck.data || [], eggs }, now);
-  const msgs = mergePerUser(items);
+  const msgs = mergePerUser(items.filter((i) => !offBy[i.kind]?.has(i.userId)));
   return msgs.map((m) => ({ ...m, name: (fam.data || []).find((f: any) => f.user_id === m.userId)?.name || "?" }));
 }
 
