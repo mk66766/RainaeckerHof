@@ -784,10 +784,7 @@ function weekCard(){
       <div class="row"><span>Preis intern (Familien)</span><strong>${eur(internPrice())}${typeof p.priceIntern==='number'?'':' · Selbstkosten'}</strong></div>
       <div class="row" style="margin-top:6px"><span>Preis extern (Nachbarn)</span><strong>${eur(p.price)}</strong></div>
     </div>
-    <div class="grid2" style="margin-top:12px">
-      <button class="yolk" onclick="sheetZusatz('',1)" ${avail<1?'disabled':''}>Zusatz nehmen</button>
-      <button class="alt" onclick="sheetSale()" ${avail<1?'disabled':''}>An Nachbarn verkaufen</button>
-    </div>
+    <button class="yolk" style="width:100%;margin-top:12px" onclick="sheetSale()" ${avail<1?'disabled':''}>An Nachbarn verkaufen</button>
     <button class="ghost" style="margin-top:6px" onclick="sheetLaid()">Eier nachtragen</button>
     ${info(`Alle Eier im Vorrat sind verkäuflich, wer zuerst kommt. Familien nehmen die ersten ${q} Eier pro Woche kostenlos, jedes weitere kostet den internen Preis. Die Prognose schätzt aus den letzten 14 Tagen, ob die Eier bis Sonntag reichen. Alle Einnahmen gehen in die Gemeinschaftskasse.`, 'So läuft es')}
   </div>
@@ -2382,7 +2379,7 @@ function manualCard(){
         <li><b>Vorrat</b> sind die gelegten Eier abzüglich der genommenen und verkauften (gezählt ab Live-Start).</li>
         <li><b>zum Verkauf</b> ist der ganze Vorrat: Es wird nichts mehr für die Familien zurückgelegt, wer zuerst kommt, bekommt die Eier. Nicht Verkauftes bleibt als <b>Übertrag</b> im Vorrat. Die älteren Eier verkauft ihr zuerst.</li>
         <li>Die <b>Prognose bis Sonntag</b> unter dem Vorrat ist nur eine Schätzung aus den letzten 14 Tagen. Sie zeigt, ob die Eier voraussichtlich für die freien Eier der Familien und die bestellten Eier reichen. Sie sperrt nichts.</li>
-        <li><b>Zusatz nehmen:</b> Eine Familie nimmt zusätzliche Eier zum internen Preis. Der Betrag geht in die Gemeinschaftskasse. Wähle, ob <b>Bar</b> oder per <b>PayPal</b> bezahlt wird. Danach erscheint die Bezahlung: Mit <b>PayPal öffnen</b> zahlt die Familie den Betrag ein, mit <b>Später</b> schließt ihr das Fenster. Der Eingang wird in der Kasse kontrolliert (siehe „Zahlungen kontrollieren“).</li>
+        <li><b>Bezahlte Eier einer Familie</b> (über die freien Eier hinaus) trägst du mit <b>Entnehmen</b> ein, die App öffnet dann die Bezahlung. Eine Familie zahlt dabei den internen Preis. Der Betrag geht in die Gemeinschaftskasse. Wähle, ob <b>Bar</b> oder per <b>PayPal</b> bezahlt wird. Danach erscheint die Bezahlung: Mit <b>PayPal öffnen</b> zahlt die Familie den Betrag ein, mit <b>Später</b> schließt ihr das Fenster. Der Eingang wird in der Kasse kontrolliert (siehe „Zahlungen kontrollieren“).</li>
         <li><b>An Nachbarn verkaufen:</b> Käufer, Anzahl und externer Preis eintragen, dazu <b>Verkauft von</b> (welche Familie verkauft) und ob <b>Bar</b> oder per <b>PayPal</b> bezahlt wird. Das Geld geht in die Gemeinschaftskasse. Danach erscheint die PayPal-Bezahlung mit QR-Code: Der Nachbar kann scannen oder den Link per <b>Per WhatsApp senden</b> bekommen. Hast du Bargeld erhalten, zahlst du es mit <b>PayPal öffnen</b> in die Gemeinschaftskasse ein.</li>
         <li>Ist nichts im Vorrat, sind beide Knöpfe gesperrt.</li></ul>`),
       manDet('bestell', 'Bestellungen von Nachbarn', `<ul>
@@ -2418,7 +2415,7 @@ function manualCard(){
         <li>Nach dem <b>Abmelden</b> kommen auf diesem Handy keine Nachrichten mehr. Beim nächsten Anmelden mit derselben Familie sind sie wieder aktiv.</li></ul>`),
       manDet('anspruch', 'Freie Eier und Entnehmen', `<ul>
         <li>In der Karte <b>Diese Woche</b> sind für jede Familie die ersten <b>${q} Eier</b> pro Woche frei. Die kleinen Eier zeigen, wie viele sie schon genommen hat: gefüllt = genommen, leer = noch frei. Die Eier werden nicht zurückgelegt.</li>
-        <li><b>Entnehmen:</b> trägt ein, dass die Familie ihre Eier abholt. Die Menge ist mit dem Rest der freien Eier vorausgefüllt. Nimmt sie mehr als die freien Eier, fragt die App nach dem Preis: Für jedes weitere Ei zahlt die Familie den internen Preis in die Gemeinschaftskasse, danach öffnet sich die Bezahlung (wie bei <b>Zusatz nehmen</b>).</li>
+        <li><b>Entnehmen:</b> trägt ein, dass die Familie ihre Eier abholt. Die Menge ist mit dem Rest der freien Eier vorausgefüllt. Nimmt sie mehr als die freien Eier, fragt die App nach dem Preis: Für jedes weitere Ei zahlt die Familie den internen Preis in die Gemeinschaftskasse, danach öffnet sich die Bezahlung (wie bei <b>Zusatz</b>).</li>
         <li>Bezahlte Eier über den freien Eiern stehen dort als <b>+n Zusatz</b>.</li>
         <li>Mit ◀ und ▶ oben in der Karte blätterst du in frühere Wochen. Dort siehst du, wer wann wie viele Eier genommen hat, und kannst jede Entnahme mit <b>Ändern</b> korrigieren oder mit ✕ löschen (ältere als 14 Tage nur der Admin). Vergessene Entnahmen trägst du dort bei der Familie mit <b>Entnahme nachtragen</b> ein (zählt für die Woche, die du gerade siehst). Beim Entnehmen kannst du auch selbst ein <b>Datum</b> wählen. <b>Zur laufenden Woche</b> bringt dich zurück.</li></ul>`),
       manDet('stat', 'Statistik', `<ul>
