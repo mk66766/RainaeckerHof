@@ -777,7 +777,7 @@ function weekCard(){
   <div class="card">
     <h2><span class="hi" aria-hidden="true">🥚</span>Vorrat &amp; Verkauf</h2>
     <div class="stock"><span class="big">${stock()}</span><span>Eier im Vorrat</span></div>
-    ${(() => { const f = weekForecast(); return f.restDays > 0 ? `<p class="muted" style="margin:6px 0 0">Bis Sonntag noch etwa ${f.more} Eier${f.left >= 0 ? ' · reicht für alle' : ` · es fehlen etwa <b>${-f.left}</b>`}</p>` : ''; })()}
+    ${(() => { const f = weekForecast(); return f.restDays > 0 ? `<p class="muted" style="margin:6px 0 0">Bis Sonntag noch etwa ${f.more} Eier zu erwarten - ${f.left >= 0 ? 'reicht für alle' : `es fehlen etwa <b>${-f.left}</b>`}</p>` : ''; })()}
     ${openQty>0 ? `<p class="muted" style="margin:4px 0 0">Von Nachbarn bestellt: ${openQty}</p>` : ''}
     ${waitN>0 ? `<p class="muted" style="margin:4px 0 0">Auf der Warteliste: ${waitN}</p>` : ''}
     <div style="margin-top:12px">
