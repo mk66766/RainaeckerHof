@@ -1073,12 +1073,20 @@ function sheetDoor(){
     <div class="grid2"><div><label>Öffnet um</label><input id="o" type="time" value="${d?d.open:'07:30'}"></div>
     <div><label>Schließt um</label><input id="c" type="time" value="${d?d.close:'20:30'}"></div></div>
     <label>Notiz (optional, z. B. Sommerzeit)</label><input id="nt" type="text">
-    <label>Geändert von</label><select id="f">${famOptions()}</select>` + actions('doDoor()'));
+    <label>Geändert von</label><select id="f">${famOptions()}</select>
+    <label style="display:flex;align-items:center;gap:10px;margin-top:14px;font-size:16px"><input type="checkbox" id="dn" checked style="width:auto;margin:0"> Andere Familien benachrichtigen</label>` + actions('doDoor()'));
 }
-function doDoor(){
+async function doDoor(){
   const o=val('o'), c=val('c'); if(!o||!c){ toast('Bitte beide Zeiten eingeben'); return; }
-  const p = P(), f = val('f'), note = val('nt').trim(); closeSheet();
-  run(async () => ok(await sb.from('door_times').insert({project_id:p.id, opens_at:o, closes_at:c, family_id:f, note})), 'Türzeiten gespeichert');
+  const p = P(), f = val('f'), note = val('nt').trim(), push = !!document.getElementById('dn')?.checked; closeSheet();
+  let id = null;
+  const done = await run(async () => { id = (await ok(await sb.from('door_times').insert({project_id:p.id, opens_at:o, closes_at:c, family_id:f, note}).select('id').single())).id; }, push ? '' : 'Türzeiten gespeichert');
+  if(!done || !push || !id) return;
+  // Push „Neue Türzeiten“ an die anderen Familien (Edge Function notify-order, Text kommt aus dem gespeicherten Eintrag)
+  try{
+    const j = await adminCall({door:id});
+    toast(j.sent ? `Türzeiten gespeichert, ${j.sent} ${j.sent === 1 ? 'Gerät' : 'Geräte'} benachrichtigt` : 'Türzeiten gespeichert. Bei den anderen Familien ist kein Gerät für Benachrichtigungen eingetragen.');
+  }catch(e){ toast('Türzeiten gespeichert, Benachrichtigung hat nicht geklappt: ' + (e.message || e)); }
 }
 
 /* ================= ZIEGEN: Vorräte ================= */
@@ -2426,7 +2434,7 @@ function manualCard(){
         <li>Für KW 31 bis 41 sind die Tageswerte gleichmäßig aus den Wochensummen verteilt, ab jetzt zählt jeder Tag echt.</li></ul>`),
       manDet('tuer', 'Automatiktür', `<ul>
         <li>Im Tab <b>Dienst</b> stehen die aktuellen Zeiten, wer sie wann geändert hat und frühere Zeiten.</li>
-        <li><b>Zeiten ändern:</b> neue Zeiten und eine Notiz (z. B. Sommerzeit) eintragen. Alle sehen die Änderung. Nach rund fünf Wochen ohne Änderung erinnert dich die App.</li></ul>`),
+        <li><b>Zeiten ändern:</b> neue Zeiten und eine Notiz (z. B. Sommerzeit) eintragen. Alle sehen die Änderung. Mit dem Haken <b>Andere Familien benachrichtigen</b> bekommen die anderen Familien eine Benachrichtigung mit den neuen Zeiten aufs Handy. Nach rund fünf Wochen ohne Änderung erinnert dich die App.</li></ul>`),
       kalender, kasse, fehler, protokoll, adminSec,
       manDet('faq', 'Häufige Fragen', `<ul>
         <li><i>Eine Familie gibt nachträglich Eier aus der Vorwoche ab, die verkauft werden.</i> Blättere in <b>Diese Woche</b> mit ◀ zur Vorwoche, tippe bei ihrer Entnahme auf <b>Ändern</b> und setze die Anzahl herunter (zum Beispiel von 10 auf 5). Die Eier sind dann wieder im Vorrat, und du trägst sie mit <b>An Nachbarn verkaufen</b> ein.</li>
@@ -2531,7 +2539,7 @@ async function loadAdmin(){
   adm.loading = false;
   if(tab === 'admin') render();
 }
-async function adminCall(payload){
+async function adminCall(payload){   // Aufruf von notify-order mit der eigenen Anmeldung (Admin-Aktionen, Türzeiten)
   const {data:{session}} = await sb.auth.getSession();
   const r = await fetch(CONFIG.url + '/functions/v1/notify-order', {method:'POST', headers:{'Content-Type':'application/json', apikey:CONFIG.key, Authorization:'Bearer ' + session.access_token}, body: JSON.stringify(payload)});
   const j = await r.json().catch(() => ({}));
@@ -2617,7 +2625,8 @@ const PUSH_KINDS = [
   ['duty', 'Dienst und Wochenrückblick', 'sonntags um 18 Uhr'],
   ['cash', 'Bargeld einzahlen', 'ab 7 Tagen offen'],
   ['pay_check', 'Zahlung prüfen', 'geht nur an Admins'],
-  ['month', 'Monatsabschluss', 'am 1., geht nur an Admins']
+  ['month', 'Monatsabschluss', 'am 1., geht nur an Admins'],
+  ['door', 'Neue Türzeiten', 'wenn jemand die Automatiktür umstellt']
 ];
 const ADMIN_KINDS = ['pay_check','month'];
 const kindsOf = f => PUSH_KINDS.filter(k => f.admin || !ADMIN_KINDS.includes(k[0]));

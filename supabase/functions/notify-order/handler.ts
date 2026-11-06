@@ -5,6 +5,7 @@
 //  3) Test aus der App: angemeldeter Nutzer (JWT), Body {test:true}
 //  5) Zeitplan der Datenbank: Header x-hook-secret + {queue:true} (Warteliste: Bestellungen, die jetzt raus können)
 //  4) Admin-Tab: angemeldeter Admin (JWT), Body {admin:"message"|"notice"|"preview", ...}
+//  6) Türzeiten geändert: angemeldetes Mitglied (JWT), Body {door:<door_times.id>} → an die anderen Familien des Projekts
 import { berlinNow, buildReminders, mergePerUser, type Now } from "./reminders.ts";
 export type Deps = {
   admin: any;                                   // Supabase-Client mit Service-Schlüssel
@@ -75,6 +76,8 @@ export function makeHandler(d: Deps) {
       if (ue || !u?.user) return json({ error: "nicht angemeldet" }, 401);
       userIds = [u.user.id];
       payload = { title: "Test erfolgreich", body: "So sehen Benachrichtigungen vom Rainäcker Hof aus.", url: `${site}/`, tag: "test" };
+    } else if (typeof body?.door === "string") {
+      return await sendDoor(d, cfg, site, req, body.door);
     } else if (typeof body?.admin === "string") {
       return await adminAction(d, cfg, site, req, body);
     } else {
@@ -89,7 +92,7 @@ export function makeHandler(d: Deps) {
 type Payload = { title: string; body: string; url: string; tag: string };
 
 // Nutzer, deren Familie eine Art von Nachricht im Admin-Tab („Wer bekommt was?“) ausgeschaltet hat.
-// Arten: order_new, order_ready, duty, cash, pay_check, month. Bei einem Lesefehler gilt „nichts ausgeschaltet“.
+// Arten: order_new, order_ready, duty, cash, pay_check, month, door. Bei einem Lesefehler gilt „nichts ausgeschaltet“.
 async function usersOff(d: Deps, kind: string): Promise<Set<string>> {
   try {
     const { data: p } = await d.admin.from("push_prefs").select("family_id").eq("kind", kind).eq("enabled", false);
@@ -98,6 +101,41 @@ async function usersOff(d: Deps, kind: string): Promise<Set<string>> {
     const { data: f } = await d.admin.from("families").select("id,user_id").in("id", ids);
     return new Set((f || []).map((r: any) => r.user_id).filter(Boolean));
   } catch { return new Set(); }
+}
+
+// Neue Türzeiten an die anderen Familien des Projekts. Der Text kommt aus dem gespeicherten Eintrag (kein freier Text),
+// der Eintrag muss frisch sein (höchstens 60 Minuten alt) und der Absender Mitglied des Projekts.
+export const DOOR_MAX_AGE_MIN = 60;
+async function sendDoor(d: Deps, cfg: Record<string, string>, site: string, req: Request, id: string): Promise<Response> {
+  const a = d.admin;
+  const jwt = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  const { data: u, error: ue } = jwt ? await a.auth.getUser(jwt) : { data: null, error: true };
+  if (ue || !u?.user) return json({ error: "nicht angemeldet" }, 401);
+  const { data: row } = await a.from("door_times").select("id,project_id,opens_at,closes_at,family_id,note,created_at").eq("id", id).maybeSingle();
+  if (!row) return json({ error: "Türzeiten nicht gefunden" }, 404);
+  const now = d.now ? d.now() : new Date();
+  if (now.getTime() - new Date(row.created_at).getTime() > DOOR_MAX_AGE_MIN * 60000) return json({ error: "Eintrag ist zu alt" }, 400);
+  const { data: fams, error: fe } = await a.from("families").select("id,name,user_id,left_on");
+  if (fe) return json({ error: "Daten nicht lesbar" }, 500);
+  const me = (fams || []).find((f: any) => f.user_id === u.user.id && !f.left_on);
+  const { data: mem } = await a.from("project_members").select("family_id").eq("project_id", row.project_id);
+  const fids = (mem || []).map((m: any) => m.family_id);
+  if (!me || !fids.includes(me.id)) return json({ error: "nicht erlaubt" }, 403);
+  const off = await usersOff(d, "door");
+  const uids = fids.filter((f: string) => f !== me.id)
+    .map((f: string) => (fams || []).find((x: any) => x.id === f && !x.left_on)?.user_id)
+    .filter((x: any) => x && !off.has(x));
+  const hm = (t: string) => String(t || "").slice(0, 5);
+  const by = (fams || []).find((f: any) => f.id === row.family_id)?.name || me.name;
+  const note = String(row.note || "").trim().slice(0, 120);
+  const p: Payload = {
+    title: "Neue Türzeiten",
+    body: `Die Tür öffnet um ${hm(row.opens_at)} Uhr und schließt um ${hm(row.closes_at)} Uhr (eingetragen von ${by})${note ? `: ${note}` : "."}`,
+    url: `${site}/#dienst:hens`,
+    tag: `tuer-${row.project_id}`,
+  };
+  try { return json(await sendTo(d, cfg, site, uids, () => p, { TTL: 86400, urgency: "normal" })); }
+  catch (e: any) { return json({ error: e?.message || "Fehler" }, 500); }
 }
 
 // Warteliste: Bestellungen, die jetzt in den Überschuss passen, an die Familie mit Dienst (ohne Dienst: an alle des Projekts)
