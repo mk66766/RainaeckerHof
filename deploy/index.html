@@ -1819,13 +1819,13 @@ async function delTx(id){
 }
 
 /* ================= Link für Nachbarn (öffentliche Seite) ================= */
-const neighborUrl = () => CONFIG.site + '/nachbarn';
+const neighborUrl = () => CONFIG.site + '/nachbarn?v=2'; // ?v=2: neue Link-Vorschau (Messenger-Cache)
 function neighborMessage(){
   return `Hallo! 🐔\nFrische Eier vom Rainäcker Hof 🥚\n\nHier siehst du, was die Eier kosten, und kannst gleich bestellen. Wir liefern sie dir:\n👉 ${neighborUrl()}\n\nLiebe Grüße vom Rainäcker Hof 💛`;
 }
 function sheetNeighbors(){
   openSheet('Link für Nachbarn teilen', `
-    <p class="muted" style="margin:0">Nachbarn sehen auf dieser Seite ohne Anmeldung, wie viele Eier gerade übrig sind, bei welcher Familie sie diese Woche abgeholt werden können und was sie kosten. Dort können sie auch Eier bestellen. Die Seite zeigt immer den aktuellen Stand.</p>
+    <p class="muted" style="margin:0">Nachbarn sehen auf dieser Seite ohne Anmeldung, was die Eier kosten, und können gleich bestellen. Ihr liefert die Eier aus. Die Seite zeigt immer den aktuellen Stand.</p>
     <label>Nachricht (du kannst sie ändern)</label>
     <textarea id="nbm" rows="9">${esc(neighborMessage())}</textarea>
     <div class="grid2" style="margin-top:12px"><button class="yolk" onclick="nbWhatsApp()">Per WhatsApp senden</button><button class="alt" onclick="nbCopy()">Link kopieren</button></div>
