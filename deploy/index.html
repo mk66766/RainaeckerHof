@@ -403,6 +403,8 @@ async function loadProject(){
     live: st.live_start || '',
     paypal: st.paypal_me || '',
     lastBackup: st.last_backup || '',
+    batFence: st.battery_fence || '',
+    batDoor: st.battery_door || '',
     log: log.data.map(l => ({id:l.id,type:l.type,date:l.date,n:l.n,fam:l.family_id,buyer:l.buyer,price:l.price===null?null:Number(l.price),txId:l.tx_id,auto:l.auto,by:l.created_by,at:l.created_at})),
     tx: tx.data.map(t => ({id:t.id,date:t.date,kind:t.kind,amt:Number(t.amount),desc:t.description,fam:t.family_id,seller:t.seller_id,method:t.pay_method,state:t.pay_state,parent:t.parent_id,by:t.created_by,at:t.created_at,confirmedAt:t.confirmed_at,confirmedBy:t.confirmed_by})),
     swaps, checks,
@@ -2272,7 +2274,7 @@ let audit = {rows:[], done:false, open:false};
 function closeAudit(){ audit = {rows:[], done:false, open:false}; render(); }
 const TLABEL = {egg_log:'Eier', transactions:'Buchung', duty_swaps:'Dienst', door_times:'Türzeiten', animals:'Tier', health_entries:'Gesundheit', supplies:'Vorrat', calendar_events:'Termin', projects:'Einstellungen', egg_orders:'Bestellung', cash_checks:'Kassenabgleich', families:'Familie'};
 const FLABEL = {n:'Anzahl', qty:'Menge', status:'Status', date:'Datum', price:'Preis', amount:'Betrag', description:'Text', family_id:'Familie', kind:'Art', week_start:'Woche', title:'Titel', note:'Notiz', name:'Name', days:'Tage', done:'erledigt', buyer:'Käufer', type:'Typ', animal:'Tier', next_due:'Nächster Termin', born:'geboren', due:'erwartet', opens_at:'Öffnet', closes_at:'Schließt', end_date:'Bis', changed_on:'Datum', set_on:'aufgefüllt am', pay_method:'Zahlungsart', is_admin:'Verwalter', projekte:'Projekte', zugang:'Zugangscode', login:'Anmeldung', left_on:'ausgetreten am', pay_state:'Zahlungsstand', seller_id:'Familie', paypal_balance:'PayPal-Konto', expected:'Soll', open_cash:'Bargeld offen'};
-const SLABEL = {quota:'Eier pro Familie', hens:'Hennen', hens_history:'Hennenbestand', neighbor_note:'Hinweis für Nachbarn', last_backup:'letzte Sicherung', price_extern:'Preis extern', price_intern:'Preis intern', puffer_pct:'Winter-Puffer %', start_date:'Erfassung ab', live_start:'Live ab', paypal_me:'PayPal.me'};
+const SLABEL = {quota:'Eier pro Familie', hens:'Hennen', hens_history:'Hennenbestand', neighbor_note:'Hinweis für Nachbarn', last_backup:'letzte Sicherung', price_extern:'Preis extern', price_intern:'Preis intern', puffer_pct:'Winter-Puffer %', start_date:'Erfassung ab', live_start:'Live ab', paypal_me:'PayPal.me', battery_fence:'Batterie Stromzaun', battery_door:'Batterien Hühnerklappe'};
 const SKIP = new Set(['id','project_id','created_at','created_by','tx_id','auto','settings','family_name','handled_at','handled_by','parent_id','confirmed_at','confirmed_by']);
 function fv(k, v){
   if(v === null || v === undefined || v === '') return '–';
@@ -2347,6 +2349,7 @@ function manualCard(){
     <li><b>Erinnerungen:</b> ob der Zeitplan läuft und was die letzten Läufe um 18 Uhr verschickt haben. Mit <b>Vorschau anzeigen</b> siehst du für einen Tag, welche Erinnerungen rausgehen würden, mit <b>An mich senden</b> kommen sie nur auf dein Handy. Die Familien bekommen dabei nichts.</li>
     ${hens ? `<li><b>Nachbar-Statistik</b> (eingeklappt): Verkäufe und Bestellungen je Monat, Stammkunden und welche Familie wie viel verkauft hat, jeweils für 6 Monate.</li>
     <li><b>Datenqualität</b> (eingeklappt): Tage der letzten 8 Wochen ohne Eier, mit weniger Eiern als die Hälfte der Hennen oder mit mehr Eiern als Hennen. <b>Ansehen</b> öffnet den Tag zum Nachtragen. Darunter Verkäufe ohne Zahlungsstand und alte Bestellungen.</li>` : ''}
+    <li><b>Batteriewechsel:</b> Datum, wann du die Batterie vom Stromzaun${hens?' und die Batterien der automatischen Hühnerklappe':''} gewechselt hast. <b>Heute</b> setzt das heutige Datum, darunter steht, wie lange das her ist.</li>
     <li>Darunter stehen die <b>Einstellungen</b>, die <b>Familien</b> und <b>Daten</b> mit <b>Sichern</b>.</li></ul>`);
   const fehler = manDet('fehler', 'Fehler korrigieren und Protokoll', `<ul>
     <li><b>Vertippt?</b> Tippe im Kalender (Tab <b>Dienst</b>) auf den Tag. Dort kannst du Einträge ändern oder mit ✕ löschen.${hens?' Das geht auch im eingeklappten <b>Verlauf</b> im Tab <b>Eier</b>.':''} Buchungen löschst du in der Kasse mit ✕. Die Kasse zeigt die letzten 15 Buchungen, mit <b>Ältere Buchungen anzeigen</b> siehst du weitere.</li>
@@ -2564,6 +2567,7 @@ function vAdmin(){
     : !adm.data ? '<div class="card"><p class="muted" style="margin:0">Übersicht wird geladen …</p></div>' : '';
   return `${wait}
   ${adm.data ? admOpenCard() + admFamCard() + admPrefCard() : ''}
+  ${admBatteryCard()}
   ${admNoticeCard()}
   ${admMessageCard()}
   ${adm.data ? admReminderCard() : ''}
@@ -2571,6 +2575,28 @@ function vAdmin(){
   ${settingsCard()}
   ${famCard()}
   ${dataCard()}`;
+}
+
+/* Batteriewechsel (Stromzaun je Projekt, Hühnerklappe nur bei Hühnern) */
+function admBatteryCard(){
+  const p = P();
+  const item = (key, label, d) => {
+    const days = d ? daysSince(d) : null;
+    return `<div style="margin-top:12px">
+      <label class="muted" style="display:block">${label}</label>
+      <div class="row" style="gap:8px;margin-top:4px">
+        <input type="date" style="flex:1;min-width:0" value="${esc(d)}" max="${today()}" onchange="saveSetting({${key}:this.value||null})">
+        <button class="alt small" onclick="saveSetting({${key}:today()})">Heute</button>
+      </div>
+      <p class="muted" style="margin:6px 0 0;font-size:14px">${d ? `Zuletzt gewechselt am ${fmtDate(d)}${days > 0 ? ` (vor ${days} ${days === 1 ? 'Tag' : 'Tagen'})` : days === 0 ? ' (heute)' : ''}` : 'Noch kein Datum eingetragen.'}</p>
+    </div>`;
+  };
+  return `<div class="card">
+    <h2 style="margin:0"><span class="hi" aria-hidden="true">🔋</span>Batteriewechsel</h2>
+    ${item('battery_fence', 'Batterie Stromzaun', p.batFence)}
+    ${isHens() ? item('battery_door', 'Batterien automatische Hühnerklappe', p.batDoor) : ''}
+    ${info('Trag hier ein, wann du die Batterie gewechselt hast. „Heute“ setzt das heutige Datum. Frühere Daten stehen im Änderungsprotokoll (Tab Hof).')}
+  </div>`;
 }
 
 /* Alles Offene auf einen Blick (beide Projekte) */
