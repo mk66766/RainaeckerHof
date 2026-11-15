@@ -1869,7 +1869,9 @@ function payMessage(x){
   const tier = isHens() ? '🐔' : '🐐';
   const dank = x.purpose ? `Vielen Dank für ${x.purpose} vom Rainäcker Hof! 🥚` : 'Vielen Dank für deinen Einkauf beim Rainäcker Hof! 🥚';
   const betrag = x.amount > 0 ? ` (${eur(x.amount)})` : '';
-  return `${x.buyer ? `Hallo ${x.buyer}!` : 'Hallo!'} ${tier}\n${dank}\n\nDu kannst ganz bequem per PayPal bezahlen${betrag}:\n👉 ${x.link}\n\nLiebe Grüße vom Rainäcker Hof 💛`;
+  const name = (x.buyer || '').trim();
+  const anrede = !name ? 'Hallo!' : /^familie\s/i.test(name) ? `Hallo ${name}!` : `Hallo Familie ${name}!`;
+  return `${anrede} ${tier}\n${dank}\n\nDu kannst ganz bequem per PayPal bezahlen${betrag}:\n👉 ${x.link}\n\nLiebe Grüße vom Rainäcker Hof 💛`;
 }
 function sheetPay(o){
   if(!P().paypal && !S.admin){ toast('Der Admin muss zuerst den PayPal.me-Namen eintragen'); return; }
