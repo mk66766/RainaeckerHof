@@ -690,7 +690,7 @@ function ordersCard(){
     <h2><span class="hi" aria-hidden="true">🛒</span>Bestellungen von Nachbarn</h2>
     ${open.length ? open.map(o => q[o.id].ready
       ? `<div class="item"><div><strong>${esc(o.buyer)}</strong> <span class="pill">bereit</span><div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div></div>
-      <div style="display:flex;align-items:center;gap:6px"><button class="yolk small" onclick="sheetSale('${o.id}')">Verkauft</button><button class="ghost" onclick="orderReject('${o.id}')" aria-label="Bestellung ablehnen">✕</button></div></div>`
+      <div style="display:flex;align-items:center;gap:6px"><button class="yolk small" onclick="sheetSale('${o.id}')">Verkaufen</button><button class="ghost" onclick="orderReject('${o.id}')" aria-label="Bestellung ablehnen">✕</button></div></div>`
       : `<div class="item" style="flex-direction:column;align-items:stretch;gap:8px"><div class="row"><div><strong>${esc(o.buyer)}</strong> <span class="muted">wartet · Platz ${q[o.id].pos}</span><div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div></div><button class="ghost" onclick="orderReject('${o.id}')" aria-label="Bestellung ablehnen">✕</button></div>
       </div>`).join('')
       : '<div class="empty">Keine offenen Bestellungen.</div>'}
@@ -2398,7 +2398,7 @@ function manualCard(){
         <li>Neue Bestellungen erscheinen im Tab <b>Eier</b> in der Karte <b>Bestellungen von Nachbarn</b>. Am Reiter <b>Eier</b> zeigt ein roter Punkt mit Zahl, wie viele offen sind. Zieh zum Aktualisieren nach unten, wenn du sie gleich sehen willst.</li>
         <li>Bestellte Eier gelten als reserviert. Die Nachbar-Seite zeigt keine Eieranzahl und keine Abholung mehr, weil ihr die Eier immer ausliefert.</li>
         <li><b>Warteliste:</b> Bestellungen werden der Reihe nach bedient. Passt eine in den Vorrat, steht <b>bereit</b> daneben, sonst „wartet · Platz n“. Kommt eine Bestellung auf die Warteliste, bekommen alle Familien eine Nachricht. Wird sie später bereit, bekommt die Familie mit Dienst Bescheid. Nach 7 Tagen verfällt eine wartende Bestellung, der Nachbar sieht das auf seiner Seite.</li>
-        <li><b>Verkauft:</b> Tippe darauf, wenn du die Eier ausgibst. Name und Anzahl sind schon eingetragen, der Preis ist der externe. Nach dem Speichern ist die Bestellung erledigt und das Geld in der Kasse.</li>
+        <li><b>Verkaufen:</b> Tippe darauf, wenn du die Eier ausgibst. Name und Anzahl sind schon eingetragen, der Preis ist der externe. Nach dem Speichern ist die Bestellung erledigt und das Geld in der Kasse.</li>
         <li><b>✕</b> lehnt eine Bestellung ab. Die Eier sind dann wieder frei. Erledigte und abgelehnte Bestellungen stehen unter „Erledigt“. Dort löschst du sie mit <b>✕</b>, zum Beispiel Testbestellungen.</li></ul>`),
       manDet('zahlkontrolle', 'Zahlungen kontrollieren, Trinkgeld und Kassenabgleich', `<ul>
         <li>Jeder Verkauf und jede Zusatz-Eier-Buchung zeigt in der <b>Kasse</b>, welche Familie verkauft bzw. genommen hat, und den Zahlungsstand darunter.</li>
