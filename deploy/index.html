@@ -192,6 +192,10 @@ nav button svg{width:24px;height:24px}
 .step input{flex:1;text-align:center;font-size:20px;font-weight:600;min-width:0}
 .step button{flex:none;width:56px;font-size:26px;line-height:1;padding:0}
 details.info{margin-top:10px}
+details.info.calc>summary{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:10px;border:2px solid var(--yolk);background:color-mix(in srgb, var(--yolk) 18%, transparent);color:var(--ink);font-weight:600;font-size:15px}
+details.info.calc>summary::after{content:'›';font-size:20px;line-height:1;transform:rotate(90deg);transition:transform .15s}
+details.info.calc[open]>summary::after{transform:rotate(-90deg)}
+button.yolkline{background:color-mix(in srgb, var(--yolk) 18%, transparent);color:var(--ink);border:2px solid var(--yolk)}
 .note-warn{margin-top:12px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb, var(--yolk) 28%, transparent);border:1.5px solid var(--yolk);color:var(--ink);font-size:14px;font-weight:500}
 label.tick{display:flex;align-items:center;gap:10px;font-weight:600;margin-top:12px;cursor:pointer}
 label.tick input{width:22px;height:22px;flex:none;margin:0;accent-color:var(--yolk)}
@@ -334,6 +338,20 @@ function ask(text, o = {}){
 }
 const lsGet = k => { try{ return localStorage.getItem(k); }catch(e){ return null; } };
 const lsSet = (k,v) => { try{ localStorage.setItem(k,v); }catch(e){} };
+/* Einklappbare Karten: offen oder zu merkt sich jedes Handy je Karte (localStorage „hof-fold“). Neue Karten starten eingeklappt. */
+const FOLD_KEY = 'hof-fold';
+let foldSt = (() => { try{ return JSON.parse(lsGet(FOLD_KEY) || '{}') || {}; }catch(e){ return {}; } })();
+const isOpen = k => foldSt[k] === true;
+function setFold(k, open, rerender){
+  if(isOpen(k) === open) return;
+  foldSt[k] = open; lsSet(FOLD_KEY, JSON.stringify(foldSt));
+  if(rerender) render();
+}
+// Karte mit Titel, Pfeil und Kurzzeile. Ist body eine Funktion, wird der Inhalt nur bei offener Karte berechnet.
+function foldCard(k, icon, title, status, body, o = {}){
+  const lazy = typeof body === 'function', open = isOpen(k);
+  return `<details class="card${o.list ? ' list' : ''}" ${open ? 'open' : ''} ontoggle="setFold('${k}',this.open,${lazy})"${o.style ? ` style="${o.style}"` : ''}>${foldHead(icon, title, status, o.right)}${lazy ? (open ? body() : '') : body}</details>`;
+}
 // Zahlenfeld mit − und + (am Handy leichter als Tippen)
 function stepper(id, value, min, max, extra){
   return `<div class="step"><button type="button" class="alt" onclick="stepBy('${id}',-1)" aria-label="weniger">−</button><input id="${id}" type="number" inputmode="numeric" min="${min}"${max !== undefined ? ` max="${max}"` : ''} value="${value}"${extra || ''}><button type="button" class="alt" onclick="stepBy('${id}',1)" aria-label="mehr">+</button></div>`;
@@ -594,15 +612,12 @@ function vEier(){
   ${ordersCard()}
   ${weekCard()}
   ${statCard()}
-  <details class="card list" ${verlaufOpen?'open':''} ontoggle="if(verlaufOpen!==this.open){verlaufOpen=this.open;render()}">
-    <summary><h2 style="margin:0"><span class="hi" aria-hidden="true">🕘</span>Verlauf</h2></summary>
-    ${verlaufOpen ? verlaufBody() : ''}
-  </details>
+  ${foldCard('verlauf', '🕘', 'Verlauf', 'Heute: ' + vlSumText(vlSums(P().log.filter(l => l.date === t))), () => verlaufBody(), {list:true})}
 `;
 }
 
 /* ---- Verlauf: pro Tag zusammengefasst, mit Zeitraum und Art ---- */
-let verlaufOpen = false, vlDays = 7, vlKind = 'alle', vlOpen = {};
+let vlDays = 7, vlKind = 'alle', vlOpen = {};
 const VL_KINDS = [['alle','Alle'],['laid','Gelegt'],['take','Genommen'],['sale','Verkäufe'],['korr','Korrekturen']];
 const vlDay = l => l.type === 'korrektur' && l.at ? ds(new Date(l.at)) : l.date;     // Korrektur unter dem Tag, an dem sie gemacht wurde
 const vlKindOf = l => l.type === 'laid' ? (l.auto === false && l.by ? 'nach' : 'laid') : l.type === 'take' || l.type === 'zusatz' ? 'take' : l.type === 'sale' ? 'sale' : l.type === 'korrektur' ? 'korr' : 'x';
@@ -689,8 +704,10 @@ function rateText(total, days, henDays){
 function statCard(){
   const seg = `<div class="seg" style="margin:8px 0 12px">${[['tage','Tage'],['wochen','Wochen'],['monate','Monate']].map(([k,l]) =>
     `<button class="${statView===k?'on':''}" onclick="statView='${k}';render()">${l}</button>`).join('')}</div>`;
-  const body = statView === 'tage' ? statDays() : statView === 'wochen' ? statWeeks() : statMonths();
-  return `<div class="card"><h2 style="margin-bottom:0"><span class="hi" aria-hidden="true">📊</span>Statistik</h2>${seg}${body}</div>`;
+  const body = () => statView === 'tage' ? statDays() : statView === 'wochen' ? statWeeks() : statMonths();
+  const by = eggsByDay(), ym = today().slice(0, 7), mon = ds(monday(new Date()));
+  const wk = sum(Object.keys(by).filter(d => d >= mon), d => by[d]), mo = sum(Object.keys(by).filter(d => d.startsWith(ym)), d => by[d]);
+  return foldCard('stat', '📊', 'Statistik', `Diese Woche ${wk} Eier · ${monthName(ym)}: ${mo}`, () => seg + body());
 }
 function statDays(){
   const p = P(), by = eggsByDay(), t = today();
@@ -877,9 +894,8 @@ function weekCard(){
     <button class="ghost" style="margin-top:6px" onclick="sheetLaid()">Eier nachtragen</button>
     ${info(`Alle Eier im Vorrat sind verkäuflich, wer zuerst kommt. Familien nehmen die ersten ${q} Eier pro Woche kostenlos, jedes weitere kostet den internen Preis. Die Prognose schätzt aus den letzten 14 Tagen, ob die Eier bis Sonntag reichen. Alle Einnahmen gehen in die Gemeinschaftskasse.`, 'So läuft es')}
   </div>
-  ${weekOff < 0 ? pastWeekCard() : `<div class="card">
-    ${weekHead(m, 'Diese Woche')}
-    <p class="muted" style="margin:6px 0 4px">Gelegt: ${w.laid} · Genommen: ${sum(Object.values(w.taken), x => x)}</p>
+  ${weekOff < 0 ? pastWeekCard() : foldCard('week', '📅', 'Diese Woche', `${w.laid} gelegt · ${sum(Object.values(w.taken), x => x)} genommen`, `
+    ${weekHead(m)}
     <div class="list">${[...members()].sort((a,b) => (b.id===S.me) - (a.id===S.me)).map(f => {
       const t = w.taken[f.id]||0, wv = 0, ent = q;
       const left = Math.max(0, ent-t), extra = Math.max(0, t-ent) + (w.zus[f.id]||0);
@@ -888,8 +904,7 @@ function weekCard(){
         ${ent>0 ? `<div class="eier" role="img" aria-label="${Math.min(t,ent)} von ${ent} Eiern genommen">${eggIcons(Math.min(t,ent), ent)}</div>` : ''}
         </div>
         <button class="${f.id===S.me?'yolk':'alt'} small" onclick="sheetTake('${f.id}',${left||1})">Entnehmen</button>
-        </div>`; }).join('')}</div>
-  </div>`}`;
+        </div>`; }).join('')}</div>`)}`;
 }
 // Einklappbare Rechnung unter dem Vorrat: Übertrag + gelegt − genommen − verkauft = Vorrat (wie stock(), nur ab Live-Start)
 function stockCalc(m){
@@ -898,8 +913,8 @@ function stockCalc(m){
   const n = t => sum(wk.filter(l => l.type === t), l => l.n), L = n('laid'), T = n('take'), Z = n('zusatz'), V = n('sale');
   const r = (label, v) => `<div class="row" style="margin-top:4px"><span>${label}</span><strong>${v}</strong></div>`;
   const last = carryFixes().filter(l => l.date < s).slice(-1)[0], fixedNow = last && last.date === carryDate(m);
-  return `<details class="info" ${fixedNow ? 'open' : ''}><summary>ⓘ Wie kommen die ${stock()} zustande?</summary>
-    <div class="row" style="margin-top:4px"><span>Übertrag aus Vorwochen</span><span style="display:flex;align-items:center;gap:6px"><strong>${carry}</strong><button class="ghost small" onclick="sheetCarry()" aria-label="Übertrag korrigieren" title="Übertrag korrigieren">✎</button></span></div>
+  return `<details class="info calc" ${fixedNow ? 'open' : ''}><summary>Wie kommen die ${stock()} zustande?</summary>
+    <div class="row" style="margin-top:8px"><span>Übertrag aus Vorwochen</span><span style="display:flex;align-items:center;gap:8px"><strong>${carry}</strong><button class="yolkline small" onclick="sheetCarry()" aria-label="Übertrag ändern">✎ Ändern</button></span></div>
     ${fixedNow ? `<p class="muted" style="margin:0 0 2px;font-size:14px">Übertrag manuell korrigiert (zuletzt ${whenFix(last)})</p>` : ''}${r('+ diese Woche gelegt', L)}${r('− von Familien genommen', T)}${Z ? r('− Zusatz-Eier (bezahlt)', Z) : ''}${r('− an Nachbarn verkauft', V)}
     <div class="row" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--line)"><span>= im Vorrat</span><strong>${carry + L - T - Z - V}</strong></div></details>`;
 }
@@ -937,10 +952,10 @@ async function doCarry(){
     `Übertrag ${cur} → ${want} gespeichert`);
 }
 // Kopf der Wochenkarte mit Blättern (◀ frühere Woche, ▶ zurück Richtung heute)
-function weekHead(m, title){
+function weekHead(m){
   const e = new Date(m); e.setDate(e.getDate()+6);
   const first = firstTrackedMonday(), canBack = m > first;
-  return `<div class="row"><h2 style="margin:0"><span class="hi" aria-hidden="true">📅</span>${title}</h2>
+  return `<div class="row" style="margin-top:8px;justify-content:flex-end">
       <span class="weeknav"><button class="ghost small" onclick="weekNav(-1)" ${canBack?'':'disabled'} aria-label="Frühere Woche">◀</button><span class="muted">${fmtDay(m)} – ${fmtDay(e)}</span><button class="ghost small" onclick="weekNav(1)" ${weekOff<0?'':'disabled'} aria-label="Spätere Woche">▶</button></span></div>`;
 }
 // Frühere Woche: was jede Familie genommen hat, mit den einzelnen Entnahmen zum Ändern
@@ -951,9 +966,8 @@ function pastWeekCard(){
   const ids = [...new Set([...p.members, ...inW.filter(l => l.fam && l.type !== 'laid').map(l => l.fam)])];
   const fams = ids.map(id => fam(id)).filter(f => f && f.id).sort((a,b) => (b.id===S.me) - (a.id===S.me) || a.name.localeCompare(b.name));
   const live = !p.live || es >= p.live, addDate = es < today() ? es : today();   // Nachtrag: Sonntag der Woche
-  return `<div class="card">
-    ${weekHead(m, `KW ${isoWeek(m)}`)}
-    <p class="muted" style="margin:6px 0 4px">Gelegt: ${n('laid')} · An Familien: ${n('take')} · Verkauft: ${n('sale')}${n('zusatz')?` · Zusatz: ${n('zusatz')}`:''}</p>
+  return foldCard('week', '📅', `KW ${isoWeek(m)}`, `${n('laid')} gelegt · ${n('take')} an Familien · ${n('sale')} verkauft${n('zusatz')?` · ${n('zusatz')} Zusatz`:''}`, `
+    ${weekHead(m)}
     ${live ? '' : '<p class="muted" style="margin:0 0 4px">Vor dem Live-Start: zählt nicht im Vorrat, nur in der Statistik.</p>'}
     <div class="list">${fams.map(f => {
       const mine = inW.filter(l => l.fam === f.id && (l.type === 'take' || l.type === 'zusatz' || l.type === 'verzicht'));
@@ -965,8 +979,7 @@ function pastWeekCard(){
         ${mine.filter(l => l.type !== 'verzicht').map(l => `<div class="row" style="font-size:14px"><span class="muted">${parseD(l.date).toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'short'})}: ${l.type==='zusatz'?`${l.n} Zusatz-Ei${l.n===1?'':'er'}`:`${l.n} entnommen`}</span>${canEditDate(l.date) ? `<span><button class="alt small" onclick="sheetEditLog('${l.id}','week')">Ändern</button> <button class="ghost small" onclick="delLog('${l.id}')" aria-label="Löschen">✕</button></span>` : '<span class="muted">nur Admin</span>'}</div>`).join('')}
         ${member && canEditDate(addDate) ? `<button class="alt small" style="align-self:flex-start" onclick="sheetTake('${f.id}',${Math.max(1, ent - t)},'${addDate}')">Entnahme nachtragen</button>` : ''}
       </div>`; }).join('') || '<div class="empty">In dieser Woche wurde nichts entnommen.</div>'}</div>
-    <button class="ghost" style="margin-top:8px" onclick="weekOff=0;render()">Zur laufenden Woche</button>
-  </div>`;
+    <button class="ghost" style="margin-top:8px" onclick="weekOff=0;render()">Zur laufenden Woche</button>`);
 }
 // Wochenanspruch als kleine Eier: gefüllt = genommen, leer = noch offen
 const eggIcons = (on, n) => Array.from({length:n}, (_, i) => `<svg class="ei ${i < on ? 'on' : ''}" viewBox="0 0 10 13" aria-hidden="true"><path d="M5 .6C2.4.6.6 5.1.6 8.1a4.4 4.4 0 0 0 8.8 0C9.4 5.1 7.6.6 5 .6z"/></svg>`).join('');
@@ -1155,12 +1168,11 @@ function dienstWeeks(n){
   const m0 = monday(new Date());
   return [...Array(n)].map((_,i)=>{ const m=new Date(m0); m.setDate(m.getDate()+7*i); const e=new Date(m); e.setDate(e.getDate()+6); return {m,e,f:dutyFam(m),i}; });
 }
-let planOpen = false;
 function planCard(){
   const p = P(), weeks = dienstWeeks(planWeeks);
   return `
-  <details class="card list" ${planOpen?'open':''} ontoggle="planOpen=this.open">
-    <summary><h2 style="margin:0"><span class="hi" aria-hidden="true">🗓️</span>Dienstplan der nächsten Wochen</h2></summary>
+  <details class="card list" ${isOpen('plan')?'open':''} ontoggle="setFold('plan',this.open)">
+    ${foldHead('🗓️', 'Dienstplan der nächsten Wochen', weeks.length ? `Jetzt: ${esc(fam(weeks[0].f).name)}${weeks[1] ? ` · danach ${esc(fam(weeks[1].f).name)}` : ''}` : '')}
     <div style="margin-top:10px">
     ${weeks.map(w=>`<div class="item"><div><strong>${esc(fam(w.f).name)}</strong> ${w.i===0?'<span class="pill">jetzt</span>':''}${p.swaps[ds(w.m)]?' <span class="muted">(festgelegt)</span>':''}
       <div class="muted">KW ${isoWeek(w.m)} · ${fmtDay(w.m)} – ${fmtDay(w.e)}${yr(w.e)}</div></div>
@@ -1672,15 +1684,15 @@ function vKasse(){
   ${openPayCard()}
   ${checkCard()}
   ${kasseChart()}
-  <details class="card list" ${kasseOpen?'open':''} ontoggle="kasseOpen=this.open">
-    <summary><h2 style="margin:0"><span class="hi" aria-hidden="true">⚖️</span>Wer bekommt was?</h2>${set.length ? `<span class="pill">${set.length} offen</span>` : ''}</summary>
+  <details class="card list" ${isOpen('settle')?'open':''} ontoggle="setFold('settle',this.open)">
+    ${foldHead('⚖️', 'Wer bekommt was?', set.length ? '' : 'Alles ausgeglichen', set.length ? `<span class="pill">${set.length} offen</span>` : '')}
     <div style="margin-top:10px">
     ${bal.filter(x => x.f.id !== 'kasse').map(x=> `<div class="item"><span>${esc(x.f.name)}</span><span class="${x.bal>0.005?'pos':x.bal<-0.005?'neg':''}">${x.bal>0.005?'bekommt ':x.bal<-0.005?'schuldet ':''}${eur(Math.abs(x.bal))}</span></div>`).join('')}
     ${set.length ? `<div style="margin-top:10px"><div class="muted" style="margin-bottom:6px">Alle Zahlungen laufen über die Gemeinschaftskasse:</div>${set.map(x=>`<div class="row" style="padding:6px 0;border-top:1px solid var(--line)"><span>${esc(fam(x.from).name)} → ${esc(fam(x.to).name)}<br><strong>${eur(x.amt)}</strong></span>
       <button class="alt small" onclick="bookSettlement('${x.fam}','${x.dir}',${x.amt.toFixed(2)})">${x.dir==='in'?'Eingezahlt':'Ausgezahlt'}</button></div>`).join('')}</div>` : '<div class="muted" style="margin-top:8px">Alles ausgeglichen.</div>'}
     </div>
   </details>
-  <details class="card list" ${txOpen?'open':''} ontoggle="txOpen=this.open">
+  <details class="card list" ${isOpen('tx')?'open':''} ontoggle="setFold('tx',this.open)">
     ${foldHead('🧾', 'Buchungen', txs.length ? `${txs.length + txMore} ${txs.length + txMore === 1 ? 'Eintrag' : 'Einträge'} · letzte: ${esc(txs[0].desc || txs[0].kind)}, ${fmtDay(parseD(txs[0].date))}` : 'Noch keine')}
     <div style="margin-top:6px">
     ${txs.length ? txs.map(t => txRow(t)).join('') : emptyState('🧾', 'Noch keine Buchungen. Mit „Buchung hinzufügen“ trägst du Einnahmen und Ausgaben ein.')}
@@ -1734,15 +1746,13 @@ function kasseChart(){
   const sel = rows.find(r => r.ym === chartMonth) || rows[rows.length - 1];
   const h = v => v > 0 ? Math.max(2, Math.round(v / max * 100)) : 0;
   const short = ym => new Date(ym + '-01T12:00:00').toLocaleDateString('de-DE', {month:'short'});
-  return `
-  <div class="card">
-    <h2><span class="hi" aria-hidden="true">📊</span>Einnahmen und Ausgaben</h2>
-    <div class="mbars">${rows.map(r => `<button class="mb ${r.ym === sel.ym ? 'on' : ''}" onclick="chartMonth='${r.ym}';render()" aria-label="${monthName(r.ym)}: Einnahmen ${eur(r.inc)}, Ausgaben ${eur(r.exp)}">
+  const cur = rows[rows.length - 1];
+  return foldCard('chart', '📊', 'Einnahmen und Ausgaben', `${monthName(cur.ym)}: Einnahmen ${eur(cur.inc)} · Ausgaben ${eur(cur.exp)}`, `
+    <div class="mbars" style="margin-top:10px">${rows.map(r => `<button class="mb ${r.ym === sel.ym ? 'on' : ''}" onclick="chartMonth='${r.ym}';render()" aria-label="${monthName(r.ym)}: Einnahmen ${eur(r.inc)}, Ausgaben ${eur(r.exp)}">
       <div class="mbb"><i class="c-in" style="height:${h(r.inc)}%"></i><i class="c-out" style="height:${h(r.exp)}%"></i></div><span>${short(r.ym)}</span></button>`).join('')}</div>
     <div class="legend"><span><i class="c-in"></i>Einnahmen</span><span><i class="c-out"></i>Ausgaben</span></div>
     <p style="margin:8px 0 0"><strong>${monthName(sel.ym)}:</strong> Einnahmen ${eur(sel.inc)} · Ausgaben ${eur(sel.exp)}</p>
-    <p class="muted" style="margin:2px 0 0">Tipp auf einen Monat zeigt seine Beträge.</p>
-  </div>`;
+    <p class="muted" style="margin:2px 0 0">Tipp auf einen Monat zeigt seine Beträge.</p>`);
 }
 function kasseTodo(){
   const tr = P().tx.filter(tracked);
@@ -1925,7 +1935,7 @@ function saleCalc(){
   rc.value = money(Math.floor(num(val('n'))) * num(val('p')));
 }
 let txKind='ausgabe';
-let kasseOpen = false, setOpen = false, txShow = 15, txOpen = false;
+let txShow = 15;
 const payerOptions = sel => members().map(f => `<option value="${f.id}" ${sel!==null && f.id===(sel||defFam())?'selected':''}>${esc(f.name)}</option>`).join('')
   + `<option value="" ${sel===null?'selected':''}>Gemeinschaftskasse</option>`;
 function sheetTx(d0){
@@ -2079,7 +2089,7 @@ function showPay(){
 /* Den PayPal.me-Link einfach anzeigen (ohne Betrag): QR, kopieren, öffnen, per WhatsApp schicken */
 function sheetPayLink(){
   const name = P().paypal;
-  if(!name){ if(!S.admin){ toast('Der Admin muss zuerst den PayPal.me-Namen eintragen'); return; } tab = 'admin'; setOpen = true; render(); toast('Bitte hier zuerst den PayPal.me-Namen eintragen'); return; }
+  if(!name){ if(!S.admin){ toast('Der Admin muss zuerst den PayPal.me-Namen eintragen'); return; } tab = 'admin'; setFold('adm-set', true); render(); toast('Bitte hier zuerst den PayPal.me-Namen eintragen'); return; }
   pay = {name, amount:0, base:0, buyer:'', purpose:'', link:paypalLink(name, 0), mode:'sale', booked:false};
   openSheet('PayPal-Link', `
     <div style="display:flex;justify-content:center;margin-top:4px"><div style="width:min(60vw,220px);border-radius:14px;overflow:hidden;border:1px solid var(--line)">${qrSvg(pay.link)}</div></div>
@@ -2262,7 +2272,7 @@ function pushCard(){
   const short = st === 'an' ? `Auf diesem Handy: an${push.reminders ? '' : ', Erinnerungen aus'}` : st === 'aus' ? 'Auf diesem Handy: aus'
     : st === 'blockiert' ? 'Auf diesem Handy: blockiert' : st === 'unbekannt' ? '' : 'Auf diesem Handy: nicht möglich';
   return `
-  <details class="card" ${hofOpen.push?'open':''} ontoggle="hofOpen.push=this.open">
+  <details class="card" ${isOpen('push')?'open':''} ontoggle="setFold('push',this.open)">
     ${foldHead('🔔', 'Benachrichtigungen', short)}
     <p class="muted" style="margin:10px 0 10px">Eine Nachricht aufs Handy, sobald ein Nachbar Eier bestellt. Jede Familie schaltet das auf ihrem eigenen Handy ein.</p>
     ${body}
@@ -2290,14 +2300,12 @@ function famCard(){
   const act = S.fams.filter(f => !f.left && !f.system), sys = S.fams.filter(f => !f.left && f.system), gone = S.fams.filter(f => f.left);
   const chips = f => S.projects.filter(p => p.members.includes(f.id)).map(p => `<span class="pc info">${projLabel(p)}</span>`).join(' ');
   const tag = f => `${f.id === S.me ? ' <span class="muted">(du)</span>' : ''}${f.admin ? ' <span class="muted">· Verwalter</span>' : ''}`;
-  return `
-  <div class="card list">
-    <div class="row"><h2 style="margin:0"><span class="hi" aria-hidden="true">👪</span>Familien</h2><button class="alt small" onclick="sheetFamAdd()">Hinzufügen</button></div>
+  return foldCard('adm-fams', '👪', 'Familien', `${act.length} ${act.length === 1 ? 'Familie' : 'Familien'}${sys.length ? ` · ${sys.length} Admin-Konto` : ''}${gone.length ? ` · ${gone.length} ausgetreten` : ''}`, `
+    <div class="row" style="justify-content:flex-end;margin-top:8px"><button class="alt small" onclick="sheetFamAdd()">Hinzufügen</button></div>
     <p class="muted" style="margin:6px 0 8px;font-size:14px">Nur für Verwalter: Familien aufnehmen und einladen, Projekte zuteilen, Zugangscode anzeigen oder ändern, Verwalter-Recht vergeben oder Familien entfernen.</p>
     ${act.map(f => `<div class="item"><div>${esc(f.name)}${tag(f)}<div style="margin-top:4px">${chips(f) || '<span class="muted">in keinem Projekt</span>'}</div></div><button class="alt small" onclick="sheetFamEdit('${f.id}')">Bearbeiten</button></div>`).join('')}
     ${sys.map(f => `<div class="item"><div>${esc(f.name)}${tag(f)}<div style="margin-top:4px"><span class="pc good">Admin-Konto</span> <span class="muted" style="font-size:14px">sieht alles, zählt nicht als Familie</span></div></div><button class="alt small" onclick="sheetFamEdit('${f.id}')">Bearbeiten</button></div>`).join('')}
-    ${gone.length ? `<p class="muted" style="margin:10px 0 0;font-size:14px">Ausgetreten: ${gone.map(f => `${esc(f.name)} (${fmtDay(parseD(f.left))})`).join(', ')}</p>` : ''}
-  </div>`;
+    ${gone.length ? `<p class="muted" style="margin:10px 0 0;font-size:14px">Ausgetreten: ${gone.map(f => `${esc(f.name)} (${fmtDay(parseD(f.left))})`).join(', ')}</p>` : ''}`, {list:true});
 }
 const projBoxes = (prefix, on) => S.projects.map(p => `<label style="display:flex;align-items:center;gap:10px;margin-top:10px;font-size:16px"><input type="checkbox" id="${prefix}-${p.id}" ${on(p) ? 'checked' : ''} style="width:auto;margin:0"> ${projLabel(p)}</label>`).join('');
 const pickedProjects = prefix => S.projects.filter(p => document.getElementById(`${prefix}-${p.id}`).checked).map(p => p.id);
@@ -2414,8 +2422,8 @@ function saveSetting(patch){
 }
 /* ---- Änderungsprotokoll ---- */
 let audit = {rows:[], done:false, open:false};
-function closeAudit(){ audit = {rows:[], done:false, open:false, last:audit.last}; render(); }
-function auditToggle(open){ if(open === audit.open) return; if(open) loadAudit(true); else closeAudit(); }
+function closeAudit(){ setFold('audit', false); audit = {rows:[], done:false, open:false, last:audit.last}; render(); }
+function auditToggle(open){ setFold('audit', open); if(open === audit.open) return; if(open) loadAudit(true); else closeAudit(); }
 // Kurzstatus der eingeklappten Karte: nur der neueste Eintrag
 async function loadAuditLast(){
   if(audit.last !== undefined || audit.lastBusy) return;
@@ -2466,6 +2474,7 @@ async function loadAudit(reset){
 }
 function auditCard(){
   loadAuditLast();
+  if(isOpen('audit') && !audit.open){ audit.open = true; loadAudit(false); }   // zuletzt offen: Einträge nachladen
   const l = audit.rows[0] || audit.last;
   const short = l ? `Letzte Änderung: ${new Date(l.changed_at).toLocaleString('de-DE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})} · ${esc(l.family_name||'unbekannt')}` : audit.last === null ? 'Noch keine Änderungen' : '';
   return `
@@ -2493,16 +2502,17 @@ function manualCard(){
     <li>Eine <b>rote Zahl</b> am Reiter zeigt, dass etwas auf dich wartet: ${hens?'bei Eier offene Bestellungen von Nachbarn, ':''}bei Kasse dein Bargeld zum Einzahlen (beim Admin auch Eingänge, die er prüfen muss).</li>
     <li>Hat deine Familie Dienst, steht oben <b>Du hast diese Woche Dienst</b>. Beim ersten Öffnen der Woche kommt dazu einmal ein kurzer Hinweis.</li>
     <li>Bei Anzahlen kannst du mit <b>−</b> und <b>+</b> tippen statt die Zahl einzugeben. Kurze Erklärungen klappst du mit <b>ⓘ</b> auf.</li>
-    <li>Ein <b>Hinweis</b> vom Admin (z. B. ein Termin für alle) steht oben in der App. Mit <b>✕</b> blendest du ihn auf deinem Handy aus.</li></ul>`);
+    <li>Viele Karten lassen sich mit einem Tipp auf die Überschrift auf- und zuklappen. Eingeklappt zeigen sie eine Kurzzeile (z. B. bei <b>Diese Woche</b> gelegt und genommen). Dein Handy merkt sich, welche Karten du offen oder zu hattest.</li>
+    </ul>`);
   const adminSec = !S.admin ? '' : manDet('admin', 'Tab Admin (nur für den Admin)', `<ul>
-    <li><b>Offen auf einen Blick:</b> für Hühner und Ziegen die PayPal-Eingänge zum Prüfen, Bargeld bei Familien, offene Bestellungen, letzter Kassenabgleich, letzte Sicherung und bis wann der Dienstplan eingetragen ist. Rot heißt überfällig. Mit <b>↻</b> lädst du neu.</li>
+    <li>Alle Karten sind einklappbar und zeigen eingeklappt eine Kurzzeile, zum Beispiel was überfällig ist.</li>
+    <li><b>Offen auf einen Blick:</b> für Hühner und Ziegen die PayPal-Eingänge zum Prüfen, Bargeld bei Familien, offene Bestellungen, letzter Kassenabgleich, letzte Sicherung und bis wann der Dienstplan eingetragen ist. Rot heißt überfällig. Mit <b>↻ Neu laden</b> lädst du neu.</li>
     <li><b>Familien im Blick:</b> je Familie, wann sie zuletzt in der App war, wann sie sich zuletzt mit dem Code angemeldet hat, wann sie zuletzt etwas eingetragen hat und auf wie vielen Handys Benachrichtigungen und Erinnerungen eingeschaltet sind.</li>
-    <li><b>Wer bekommt was?:</b> Tippe auf eine Familie und nimm den Haken bei einer Art von Benachrichtigung weg (neue Bestellung, offene Bestellung für die Familie mit Dienst, Dienst und Wochenrückblick, Bargeld einzahlen, Zahlung prüfen, Monatsabschluss). Das gilt sofort für alle Handys der Familie. Hinweise und Nachrichten, die du selbst verschickst, kommen immer an.</li>
-    <li><b>Hinweis an alle:</b> Text eingeben, optional ein Datum bei <b>Anzeigen bis</b>, dann <b>Veröffentlichen</b>. Er erscheint bei allen Familien des Projekts oben in der App und, wenn angehakt, als Benachrichtigung. <b>Entfernen</b> nimmt ihn zurück.</li>
-    <li><b>Nachricht an eine Familie:</b> Familie wählen, Text eingeben, <b>Nachricht senden</b>. So prüfst du, ob Benachrichtigungen auf ihrem Handy ankommen.</li>
+    <li><b>Wer bekommt was?:</b> Tippe auf eine Familie und nimm den Haken bei einer Art von Benachrichtigung weg (neue Bestellung, offene Bestellung für die Familie mit Dienst, Dienst und Wochenrückblick, Bargeld einzahlen, Zahlung prüfen, Monatsabschluss). Das gilt sofort für alle Handys der Familie.</li>
+    <li>Nachrichten an Familien schickst du wie alle anderen im Tab <b>Hof</b> mit <b>Nachricht an Familien senden</b>.</li>
     <li><b>Erinnerungen:</b> ob der Zeitplan läuft und was die letzten Läufe um 18 Uhr verschickt haben. Mit <b>Vorschau anzeigen</b> siehst du für einen Tag, welche Erinnerungen rausgehen würden, mit <b>An mich senden</b> kommen sie nur auf dein Handy. Die Familien bekommen dabei nichts.</li>
-    ${hens ? `<li><b>Nachbar-Statistik</b> (eingeklappt): Verkäufe und Bestellungen je Monat, Stammkunden und welche Familie wie viel verkauft hat, jeweils für 6 Monate.</li>
-    <li><b>Datenqualität</b> (eingeklappt): Tage der letzten 8 Wochen ohne Eier, mit weniger Eiern als die Hälfte der Hennen oder mit mehr Eiern als Hennen. <b>Ansehen</b> öffnet den Tag zum Nachtragen. Darunter Verkäufe ohne Zahlungsstand und alte Bestellungen.</li>` : ''}
+    ${hens ? `<li><b>Nachbar-Statistik:</b> Verkäufe und Bestellungen je Monat, Stammkunden und welche Familie wie viel verkauft hat, jeweils für 6 Monate.</li>
+    <li><b>Datenqualität:</b> Tage der letzten 8 Wochen ohne Eier, mit weniger Eiern als die Hälfte der Hennen oder mit mehr Eiern als Hennen. <b>Ansehen</b> öffnet den Tag zum Nachtragen. Darunter Verkäufe ohne Zahlungsstand und alte Bestellungen.</li>` : ''}
     <li><b>Batteriewechsel:</b> Datum, wann du die Batterie vom Stromzaun${hens?' und die Batterien der automatischen Hühnerklappe':''} gewechselt hast. <b>Heute</b> setzt das heutige Datum, darunter steht, wie lange das her ist.</li>
     <li>Darunter stehen die <b>Einstellungen</b>, die <b>Familien</b> und <b>Daten</b> mit <b>Sichern</b>.</li></ul>`);
   const fehler = manDet('fehler', 'Fehler korrigieren und Protokoll', `<ul>
@@ -2545,7 +2555,7 @@ function manualCard(){
         <li>Der <b>Verlauf</b> (unten im Tab Eier, aufklappen) fasst jeden Tag in einer Zeile zusammen. Tippe auf den Tag, um die einzelnen Einträge zu sehen und mit ✕ zu löschen. Oben wählst du den Zeitraum (<b>7 Tage</b>, <b>30 Tage</b>, <b>Alles</b>) und die Art (<b>Gelegt</b>, <b>Genommen</b>, <b>Verkäufe</b>, <b>Korrekturen</b>). Mit <b>Ältere Tage laden</b> schaust du weiter zurück.</li></ul>`),
       manDet('vorrat', 'Vorrat, Verkauf und Zusatz-Eier', `<ul>
         <li><b>Vorrat</b> sind die gelegten Eier abzüglich der genommenen und verkauften (gezählt ab Live-Start).</li>
-        <li>Stimmt der <b>Übertrag aus Vorwochen</b> nicht (etwa weil Eier nicht an die nächste Dienst-Familie weitergegeben wurden)? Klappe „Wie kommen die … zustande?“ auf und tippe auf den Stift ✎ neben dem Übertrag. Gib den richtigen Wert und einen <b>Grund</b> ein. Jede Familie darf das. Die Änderung steht mit Name, Uhrzeit, altem und neuem Wert im Verlauf unter <b>Korrekturen</b>.</li>
+        <li>Stimmt der <b>Übertrag aus Vorwochen</b> nicht (etwa weil Eier nicht an die nächste Dienst-Familie weitergegeben wurden)? Tippe auf den gelben Knopf „Wie kommen die … zustande?“ und dort neben dem Übertrag auf <b>✎ Ändern</b>. Gib den richtigen Wert und einen <b>Grund</b> ein. Jede Familie darf das. Die Änderung steht mit Name, Uhrzeit, altem und neuem Wert im Verlauf unter <b>Korrekturen</b>.</li>
         <li><b>Entnehmen</b> erst eintragen, wenn die Eier wirklich übergeben sind, und das Häkchen <b>Die Eier wurden schon ausgeteilt</b> setzen. Eingetragene Eier fehlen sofort im Vorrat und können Bestellungen von Nachbarn blockieren.</li>
         <li><b>zum Verkauf</b> ist der ganze Vorrat: Es wird nichts mehr für die Familien zurückgelegt, wer zuerst kommt, bekommt die Eier. Nicht Verkauftes bleibt als <b>Übertrag</b> im Vorrat. Die älteren Eier verkauft ihr zuerst.</li>
         <li>Die <b>Prognose bis Sonntag</b> unter dem Vorrat ist nur eine Schätzung aus den letzten 14 Tagen. Sie zeigt, ob die Eier voraussichtlich für die freien Eier der Familien und die bestellten Eier reichen. Sie sperrt nichts.</li>
@@ -2633,8 +2643,8 @@ function manualCard(){
     ? 'So benutzt ihr die App für die Hühner: Eier zählen, Vorrat und Überschuss verteilen, Dienst und Türzeiten planen, Kosten abrechnen.'
     : 'So benutzt ihr die App für die Ziegen: Tiere und Fotos, Gesundheit, Vorräte, Dienst und Kosten.';
   return `
-  <details class="card" ${manOpen._all?'open':''} ontoggle="manOpen._all=this.open">
-    <summary><h2 style="margin:0"><span class="hi" aria-hidden="true">📖</span>Anleitung: ${title}</h2></summary>
+  <details class="card" ${isOpen('manual')?'open':''} ontoggle="setFold('manual',this.open)">
+    ${foldHead('📖', `Anleitung: ${title}`, 'Tippe auf ein Thema, um es aufzuklappen')}
     <p class="muted" style="margin:10px 0 0">${intro} Tippe auf ein Thema, um es aufzuklappen.</p>
     <div class="man" style="margin-top:8px">${common}${own.join('')}</div>
   </details>`;
@@ -2652,8 +2662,7 @@ function weekDutyPopup(){
   ask(`Diese Woche (KW ${isoWeek(m)}) ist deine Familie bei den ${isHens() ? 'Hühnern' : 'Ziegen'} mit dem Dienst dran.`, {title:'Du hast diese Woche Dienst', ok:'Alles klar', cancel:false});
 }
 // Eingeklappte Karte mit Titel und Kurzstatus (Tab Hof, Kasse)
-const foldHead = (icon, title, status) => `<summary><div><h2 style="margin:0"><span class="hi" aria-hidden="true">${icon}</span>${title}</h2>${status ? `<div class="muted" style="font-size:14px;margin-top:2px">${status}</div>` : ''}</div></summary>`;
-let hofOpen = {};
+const foldHead = (icon, title, status, right) => `<summary><div style="flex:1;min-width:0"><h2 style="margin:0"><span class="hi" aria-hidden="true">${icon}</span>${title}${right ? ` ${right}` : ''}</h2>${status ? `<div class="muted" style="font-size:14px;margin-top:2px">${status}</div>` : ''}</div></summary>`;
 function vHof(){
   const p = P(), th = {auto:'Automatisch', light:'Hell', dark:'Dunkel'}[themeNow()];
   return `
@@ -2663,13 +2672,13 @@ function vHof(){
   </div>` : ''}
   ${fmCard()}
   ${isHens() ? pushCard() : ''}
-  <details class="card" ${hofOpen.theme?'open':''} ontoggle="hofOpen.theme=this.open">
+  <details class="card" ${isOpen('theme')?'open':''} ontoggle="setFold('theme',this.open)">
     ${foldHead('🌓', 'Darstellung', th)}
     <div class="seg" style="margin-top:10px">${[['auto','Automatisch'],['light','Hell'],['dark','Dunkel']].map(([k,l]) => `<button class="${themeNow()===k?'on':''}" aria-pressed="${themeNow()===k}" onclick="setTheme('${k}')">${l}</button>`).join('')}</div>
     <p class="muted" style="margin:8px 0 0">Automatisch folgt der Einstellung des Handys. Die Wahl gilt nur auf diesem Handy.</p>
   </details>
-  ${auditCard()}
   ${manualCard()}
+  ${auditCard()}
   <div class="card">
     <h2><span class="hi" aria-hidden="true">👤</span>Angemeldet</h2>
     <div class="row"><span>${fam(S.me).system ? 'Konto' : 'Familie'} <strong>${esc(fam(S.me).name)}</strong>${S.admin?' <span class="pill">Admin</span>':''}</span><button class="alt small" onclick="logout()">Abmelden</button></div>
@@ -2679,7 +2688,7 @@ function vHof(){
 /* Nachricht an Familien (Tab Hof): kurze Push-Nachricht an alle oder ausgewählte Familien des Projekts.
    Senden über notify-order {family_msg:true}; dort gelten 200 Zeichen, 1 Minute Abstand und 10 pro Tag je Familie. */
 const FM_MAX = 200;
-let fm = {open:false, to:'all', text:'', busy:false};    // to: 'all' oder Liste von Familien-IDs
+let fm = {to:'all', text:'', busy:false};    // to: 'all' oder Liste von Familien-IDs
 const fmOthers = () => members().filter(f => f.id !== S.me && !f.left);
 function fmDuty(){ const d = dutyFam(monday(new Date())); return fmOthers().some(f => f.id === d) ? d : null; }
 const fmIsDuty = () => { const d = fmDuty(); return !!d && Array.isArray(fm.to) && fm.to.length === 1 && fm.to[0] === d; };
@@ -2693,7 +2702,7 @@ function fmCard(){
   const duty = fmDuty(), sel = id => Array.isArray(fm.to) && fm.to.includes(id);
   const chip = (on, click, label) => `<button class="${on ? 'on' : ''}" aria-pressed="${on}" onclick="${click}">${label}</button>`;
   const none = Array.isArray(fm.to) && !fm.to.length;
-  return `<details class="card" ${fm.open ? 'open' : ''} ontoggle="fm.open=this.open">
+  return `<details class="card" ${isOpen('fm') ? 'open' : ''} ontoggle="setFold('fm',this.open)">
     ${foldHead('📣', 'Nachricht an Familien senden', '')}
     <div style="margin-top:10px">
       <div class="muted" style="font-size:14px">An wen?</div>
@@ -2785,8 +2794,6 @@ function vAdmin(){
   return `${wait}
   ${adm.data ? admOpenCard() + admFamCard() + admPrefCard() : ''}
   ${admBatteryCard()}
-  ${admNoticeCard()}
-  ${admMessageCard()}
   ${adm.data ? admReminderCard() : ''}
   ${isHens() ? admNeighborCard() + admQualityCard() : ''}
   ${settingsCard()}
@@ -2808,17 +2815,17 @@ function admBatteryCard(){
       <p class="muted" style="margin:6px 0 0;font-size:14px">${d ? `Zuletzt gewechselt am ${fmtDate(d)}${days > 0 ? ` (vor ${days} ${days === 1 ? 'Tag' : 'Tagen'})` : days === 0 ? ' (heute)' : ''}` : 'Noch kein Datum eingetragen.'}</p>
     </div>`;
   };
-  return `<div class="card">
-    <h2 style="margin:0"><span class="hi" aria-hidden="true">🔋</span>Batteriewechsel</h2>
+  const ago = d => { const n = d ? daysSince(d) : null; return n === null ? 'kein Datum' : n === 0 ? 'heute' : `vor ${n} ${n === 1 ? 'Tag' : 'Tagen'}`; };
+  return foldCard('adm-bat', '🔋', 'Batteriewechsel', `Stromzaun: ${ago(p.batFence)}${isHens() ? ` · Klappe: ${ago(p.batDoor)}` : ''}`, `
     ${item('battery_fence', 'Batterie Stromzaun', p.batFence)}
     ${isHens() ? item('battery_door', 'Batterien automatische Hühnerklappe', p.batDoor) : ''}
-    ${info('Trag hier ein, wann du die Batterie gewechselt hast. „Heute“ setzt das heutige Datum. Frühere Daten stehen im Änderungsprotokoll (Tab Hof).')}
-  </div>`;
+    ${info('Trag hier ein, wann du die Batterie gewechselt hast. „Heute“ setzt das heutige Datum. Frühere Daten stehen im Änderungsprotokoll (Tab Hof).')}`);
 }
 
 /* Alles Offene auf einen Blick (beide Projekte) */
 function admOpenCard(){
-  const row = (label, value, bad) => `<div class="item"><span>${label}</span><span class="${bad ? 'neg' : ''}" style="text-align:right">${value}</span></div>`;
+  let nBad = 0;
+  const row = (label, value, bad) => { if(bad) nBad++; return `<div class="item"><span>${label}</span><span class="${bad ? 'neg' : ''}" style="text-align:right">${value}</span></div>`; };
   const block = p => {
     const pr = p.pruefen || {n:0, sum:0}, bar = p.bar || [];
     const ck = agoDays(p.last_check), bk = p.last_backup ? daysSince(p.last_backup) : null;
@@ -2832,19 +2839,19 @@ function admOpenCard(){
       ${row('Sicherung', p.last_backup ? fmtDate(p.last_backup) + (bk ? ` (vor ${bk} Tagen)` : '') : 'noch nie', bk === null || bk >= 31)}
       ${row('Dienstplan eingetragen bis', dutyEnd ? fmtDate(ds(dutyEnd)) : 'nicht eingetragen', dutyLeft === null || dutyLeft < 56)}`;
   };
-  return `<div class="card list">
-    <div class="row"><h2 style="margin:0"><span class="hi" aria-hidden="true">📋</span>Offen auf einen Blick</h2><button class="ghost" onclick="adm.data=null;render()" aria-label="Neu laden">↻</button></div>
-    ${(adm.data.projects.filter(x => x.kind === P().kind).length ? adm.data.projects.filter(x => x.kind === P().kind) : adm.data.projects).map(block).join('')}
-    ${info('Rot heißt: überfällig. PayPal-Eingänge ab 3 Tagen, Bargeld ab 7 Tagen, Bestellungen ab 3 Tagen, Kassenabgleich und Sicherung nach einem Monat, Dienstplan, wenn er in weniger als 8 Wochen endet.')}
-  </div>`;
+  const body = (adm.data.projects.filter(x => x.kind === P().kind).length ? adm.data.projects.filter(x => x.kind === P().kind) : adm.data.projects).map(block).join('');
+  return foldCard('adm-open', '📋', 'Offen auf einen Blick', nBad ? `<span class="neg">${nBad} überfällig</span>` : 'Nichts überfällig', `
+    <div class="row" style="justify-content:flex-end"><button class="ghost" onclick="adm.data=null;render()" aria-label="Neu laden">↻ Neu laden</button></div>
+    ${body}
+    ${info('Rot heißt: überfällig. PayPal-Eingänge ab 3 Tagen, Bargeld ab 7 Tagen, Bestellungen ab 3 Tagen, Kassenabgleich und Sicherung nach einem Monat, Dienstplan, wenn er in weniger als 8 Wochen endet.')}`, {list:true, style: nBad ? 'border:2px solid var(--bad)' : ''});
 }
 
 /* Familien im Blick: Anmeldung, Aktivität, Geräte */
 function admFamCard(){
   const fams = adm.data.families.filter(f => !f.left_on);
   const line = (label, v) => `<div class="muted" style="font-size:14px">${label}: <span style="color:var(--ink)">${v}</span></div>`;
-  return `<div class="card list">
-    <h2><span class="hi" aria-hidden="true">👀</span>Familien im Blick</h2>
+  const noDev = fams.filter(f => !f.devices && !f.system).length;
+  return foldCard('adm-fam', '👀', 'Familien im Blick', `${fams.length} ${fams.length === 1 ? 'Konto' : 'Konten'}${noDev ? ` · ${noDev} ohne Benachrichtigungen` : ''}`, `
     ${fams.map(f => {
       const act = latest(f.last_laid, f.last_egg, f.last_tx, f.last_change);
       const dev = f.devices ? `${f.devices} ${f.devices === 1 ? 'Gerät' : 'Geräte'}, Erinnerungen ${f.devices_rem === f.devices ? 'an' : f.devices_rem ? `auf ${f.devices_rem} an` : 'aus'}` : '<span class="neg">keine Benachrichtigungen</span>';
@@ -2857,8 +2864,7 @@ function admFamCard(){
         ${line('Benachrichtigungen', dev)}
       </div>`;
     }).join('')}
-    ${info('„Zuletzt in der App“: Die App erneuert die Anmeldung etwa stündlich, solange sie offen ist. Das zeigt ungefähr, wann die Familie die App zuletzt benutzt hat. „Letzte Anmeldung mit Code“ ist die Anmeldung mit dem 6-stelligen Code, danach bleibt man angemeldet. „Eingetragen“ zählt Eier, Buchungen und Änderungen in beiden Projekten. Benachrichtigungen: Geräte, auf denen die Familie sie eingeschaltet hat.')}
-  </div>`;
+    ${info('„Zuletzt in der App“: Die App erneuert die Anmeldung etwa stündlich, solange sie offen ist. Das zeigt ungefähr, wann die Familie die App zuletzt benutzt hat. „Letzte Anmeldung mit Code“ ist die Anmeldung mit dem 6-stelligen Code, danach bleibt man angemeldet. „Eingetragen“ zählt Eier, Buchungen und Änderungen in beiden Projekten. Benachrichtigungen: Geräte, auf denen die Familie sie eingeschaltet hat.')}`, {list:true});
 }
 
 /* Wer bekommt was? Schalter je Familie und Art der Benachrichtigung (Tabelle push_prefs, gelesen von notify-order) */
@@ -2877,15 +2883,14 @@ const kindsOf = f => PUSH_KINDS.filter(k => f.admin || !ADMIN_KINDS.includes(k[0
 const prefOn = (fid, kind) => !(adm.prefs || []).some(x => x.family_id === fid && x.kind === kind && x.enabled === false);
 function admPrefCard(){
   const fams = S.fams.filter(f => !f.left).sort((a,b) => (!!a.system - !!b.system) || a.name.localeCompare(b.name));
-  if(adm.prefs === null) return `<div class="card"><h2><span class="hi" aria-hidden="true">🔔</span>Wer bekommt was?</h2><p class="muted" style="margin:0">Diese Einstellung ist erst nach dem nächsten Datenbank-Update verfügbar.</p></div>`;
-  return `<div class="card list">
-    <h2><span class="hi" aria-hidden="true">🔔</span>Wer bekommt was?</h2>
-    <p class="muted" style="margin:0 0 4px">Haken = die Familie bekommt diese Nachricht. Die Schalter am Handy (Hof → Benachrichtigungen) gelten zusätzlich.</p>
+  if(adm.prefs === null) return foldCard('adm-pref', '🔔', 'Wer bekommt was?', 'Noch nicht verfügbar', `<p class="muted" style="margin:10px 0 0">Diese Einstellung ist erst nach dem nächsten Datenbank-Update verfügbar.</p>`);
+  const off = fams.reduce((a, f) => a + kindsOf(f).filter(k => !prefOn(f.id, k[0])).length, 0);
+  return foldCard('adm-pref', '🔔', 'Wer bekommt was?', off ? `${off} ${off === 1 ? 'Nachricht' : 'Nachrichten'} ausgeschaltet` : 'Alle bekommen alles', `
+    <p class="muted" style="margin:10px 0 4px">Haken = die Familie bekommt diese Nachricht. Die Schalter am Handy (Hof → Benachrichtigungen) gelten zusätzlich.</p>
     ${fams.map(f => `<details class="item" style="display:block" ${adm.prefOpen === f.id ? 'open' : ''} ontoggle="if(this.open) adm.prefOpen='${f.id}'"><summary style="cursor:pointer;font-weight:600">${esc(f.name)}${f.system ? ' <span class="muted">(Admin-Konto)</span>' : ''} <span class="muted" style="font-weight:400">· ${kindsOf(f).filter(k => prefOn(f.id, k[0])).length} von ${kindsOf(f).length} an</span></summary>
       ${kindsOf(f).map(k => `<label style="display:flex;align-items:center;gap:10px;margin-top:10px;font-size:16px"><input type="checkbox" ${prefOn(f.id, k[0]) ? 'checked' : ''} onchange="admPrefSet('${f.id}','${k[0]}',this.checked)" style="width:auto;margin:0"><span>${k[1]} <span class="muted" style="font-size:14px">· ${k[2]}</span></span></label>`).join('')}
     </details>`).join('')}
-    ${info('Gilt für alle Geräte der Familie. Hinweise und Nachrichten, die du im Tab Admin selbst verschickst, kommen immer an. „Zahlung prüfen“ und „Monatsabschluss“ gibt es nur beim Admin-Konto.')}
-  </div>`;
+    ${info('Gilt für alle Geräte der Familie. „Zahlung prüfen“ und „Monatsabschluss“ gibt es nur beim Admin-Konto.')}`, {list:true});
 }
 async function admPrefSet(fid, kind, on){
   const old = adm.prefs || [];
@@ -2901,17 +2906,16 @@ function admReminderCard(){
   const last = calls[0], late = !last || (Date.now() - new Date(last.at)) > 2 * 3600e3, bad = last && last.status !== 200;
   const runText = r => { const x = r.result || {}; return r.kind === 'fehler' ? `<span class="neg">Fehler: ${esc(x.error || '?')}</span>` : `${x.users || 0} ${x.users === 1 ? 'Familie' : 'Familien'}, ${x.sent || 0} zugestellt${x.failed ? `, <span class="neg">${x.failed} fehlgeschlagen</span>` : ''}${x.gone ? `, ${x.gone} Geräte abgemeldet` : ''}${x.force ? ' (Test)' : ''}`; };
   const pv = adm.prev;
-  return `<div class="card list">
-    <h2><span class="hi" aria-hidden="true">⏰</span>Erinnerungen</h2>
-    <p style="margin:0 0 6px" class="${late || bad ? 'neg' : ''}">${!last ? 'Kein Aufruf des Zeitplans in den letzten Stunden gefunden.' : bad ? `Letzter Aufruf ${agoText(last.at)} mit Fehler ${last.status || ''} ${esc(last.error || '')}` : late ? `Letzter Aufruf des Zeitplans: ${agoText(last.at)}. Er sollte jede Stunde laufen.` : `✓ Der Zeitplan läuft (letzter Aufruf ${agoText(last.at)}).`}</p>
+  const st = !last ? '<span class="neg">Zeitplan: kein Aufruf gefunden</span>' : bad ? '<span class="neg">Zeitplan: Fehler beim letzten Aufruf</span>' : late ? `<span class="neg">Zeitplan: letzter Aufruf ${agoText(last.at)}</span>` : `✓ Zeitplan läuft${runs[0] ? ` · letzter Lauf ${agoText(runs[0].at)}` : ''}`;
+  return foldCard('adm-rem', '⏰', 'Erinnerungen', st, `
+    <p style="margin:10px 0 6px" class="${late || bad ? 'neg' : ''}">${!last ? 'Kein Aufruf des Zeitplans in den letzten Stunden gefunden.' : bad ? `Letzter Aufruf ${agoText(last.at)} mit Fehler ${last.status || ''} ${esc(last.error || '')}` : late ? `Letzter Aufruf des Zeitplans: ${agoText(last.at)}. Er sollte jede Stunde laufen.` : `✓ Der Zeitplan läuft (letzter Aufruf ${agoText(last.at)}).`}</p>
     <h2 style="font-size:17px;margin:12px 0 4px">Letzte Läufe um 18 Uhr</h2>
     ${runs.length ? runs.slice(0, 5).map(r => `<div class="item" style="align-items:flex-start"><span>${agoText(r.at)}</span><span style="text-align:right;font-size:14px">${runText(r)}</span></div>`).join('') : '<p class="muted" style="margin:0">Noch kein Lauf protokolliert. Das Protokoll gibt es seit dem 25.10.2026.</p>'}
     <h2 style="font-size:17px;margin:16px 0 4px">Vorschau</h2>
     <p class="muted" style="margin:0 0 8px">Zeigt, welche Erinnerungen an diesem Tag um 18 Uhr rausgehen würden. Es wird nichts an die Familien gesendet.</p>
     <input type="date" id="pvd" value="${adm.prevDate || today()}" onchange="adm.prevDate=this.value">
     <div class="grid2" style="margin-top:10px"><button class="alt" onclick="admPreview(false)" ${adm.prevBusy ? 'disabled' : ''}>Vorschau anzeigen</button><button class="alt" onclick="admPreview(true)" ${adm.prevBusy ? 'disabled' : ''}>An mich senden</button></div>
-    ${pv ? `<p class="muted" style="margin:12px 0 0">Für ${fmtDate(pv.date)}:</p>${pv.messages.length ? pv.messages.map(m => `<div class="item" style="align-items:flex-start;flex-direction:column;gap:2px"><strong>${esc(m.name)}: ${esc(m.title)}</strong><span style="font-size:14px;white-space:pre-line">${esc(m.body)}</span></div>`).join('') : '<p style="margin:4px 0 0">Keine Erinnerungen an diesem Tag.</p>'}` : ''}
-  </div>`;
+    ${pv ? `<p class="muted" style="margin:12px 0 0">Für ${fmtDate(pv.date)}:</p>${pv.messages.length ? pv.messages.map(m => `<div class="item" style="align-items:flex-start;flex-direction:column;gap:2px"><strong>${esc(m.name)}: ${esc(m.title)}</strong><span style="font-size:14px;white-space:pre-line">${esc(m.body)}</span></div>`).join('') : '<p style="margin:4px 0 0">Keine Erinnerungen an diesem Tag.</p>'}` : ''}`, {list:true});
 }
 async function admPreview(send){
   const d = (document.getElementById('pvd') || {}).value || today();
@@ -2923,28 +2927,7 @@ async function admPreview(send){
   adm.prevBusy = false; render();
 }
 
-/* Nachricht an eine Familie (zum Testen der Benachrichtigungen) */
-function admMessageCard(){
-  const fams = S.fams.filter(f => !f.left && f.id !== S.me).concat(S.fams.filter(f => f.id === S.me));   // eigene Familie zuletzt
-  return `<div class="card">
-    <h2><span class="hi" aria-hidden="true">✉️</span>Nachricht an eine Familie</h2>
-    <p class="muted" style="margin:0 0 8px">Schickt eine Benachrichtigung auf alle Handys der Familie, auf denen sie eingeschaltet ist. So prüfst du, ob Nachrichten ankommen.</p>
-    <select id="amf">${fams.map(f => `<option value="${f.id}">${esc(f.name)}${f.id === S.me ? ' (du)' : ''}</option>`).join('')}</select>
-    <textarea id="amt" rows="3" maxlength="300" style="margin-top:10px"></textarea>
-    <button class="yolk" style="width:100%;margin-top:10px" onclick="admSend()">Nachricht senden</button>
-  </div>`;
-}
-async function admSend(){
-  const fid = val('amf'), text = val('amt').trim();
-  if(!text){ toast('Bitte einen Text eingeben'); return; }
-  try{
-    const r = await adminCall({admin:'message', family_id:fid, text});
-    toast(r.sent > 0 ? `Gesendet an ${fam(fid).name} (${r.sent} ${r.sent === 1 ? 'Gerät' : 'Geräte'})` : r.total > 0 ? 'Zustellung gerade nicht möglich, bitte später noch einmal' : `${fam(fid).name} hat keine Benachrichtigungen eingeschaltet`);
-    if(r.sent > 0) document.getElementById('amt').value = '';
-  }catch(e){ toast('Fehler: ' + (e.message || e)); }
-}
-
-/* Hinweis an alle Familien des Projekts: oben in der App und als Benachrichtigung */
+/* Hinweis-Banner (settings.notice). Die Admin-Karte zum Veröffentlichen ist seit 20.11.2026 entfallen (Nachrichten laufen über „Nachricht an Familien senden“ im Tab Hof); ein alter Hinweis würde weiter angezeigt. */
 const noticeOf = () => { const n = (S.projects.find(x => x.id === S.cur) || {settings:{}}).settings.notice; return n && n.text ? n : null; };
 const noticeActive = n => !!n && (!n.until || today() <= n.until);
 function noticeBanner(){
@@ -2953,36 +2936,6 @@ function noticeBanner(){
   return `<div class="card dutynote"><div class="row" style="align-items:flex-start"><div><strong><span aria-hidden="true">📣</span> Hinweis</strong><p style="margin:4px 0 0;white-space:pre-line">${esc(n.text)}</p></div><button class="ghost" onclick="noticeHide()" aria-label="Hinweis ausblenden">✕</button></div></div>`;
 }
 function noticeHide(){ const n = noticeOf(); if(n) lsSet(`hof-hinweis:${S.cur}:${n.at}`, '1'); render(); }
-function admNoticeCard(){
-  const n = noticeOf();
-  return `<div class="card">
-    <h2><span class="hi" aria-hidden="true">📣</span>Hinweis an alle (${projLabel(P())})</h2>
-    <p class="muted" style="margin:0 0 8px">Erscheint bei allen Familien ${isHens() ? 'der Hühner' : 'der Ziegen'} oben in der App, bis sie ihn mit ✕ ausblenden oder er abläuft. Auf Wunsch auch als Benachrichtigung.</p>
-    ${n ? `<p style="margin:0 0 8px;font-size:14px" class="${noticeActive(n) ? '' : 'muted'}">${noticeActive(n) ? 'Aktiv' : 'Abgelaufen'} seit ${agoText(n.at)}${n.until ? `, bis ${fmtDate(n.until)}` : ''}</p>` : ''}
-    <textarea id="ntx" rows="3" maxlength="300">${esc(n ? n.text : '')}</textarea>
-    <label class="muted" style="display:block;margin-top:10px">Anzeigen bis (leer = bis du ihn entfernst)</label>
-    <input type="date" id="nun" value="${n && n.until ? n.until : ''}">
-    <label style="display:flex;align-items:center;gap:10px;margin-top:10px;font-size:16px"><input type="checkbox" id="npu" checked style="width:auto;margin:0"> Auch als Benachrichtigung senden</label>
-    <div class="grid2" style="margin-top:10px">${n ? '<button class="alt" onclick="admNoticeClear()">Entfernen</button>' : '<span></span>'}<button class="yolk" onclick="admNoticeSave()">Veröffentlichen</button></div>
-  </div>`;
-}
-async function admNoticeSave(){
-  const text = val('ntx').trim(), until = val('nun') || null, pushIt = document.getElementById('npu').checked;
-  if(!text){ toast('Bitte einen Text eingeben'); return; }
-  if(until && until < today()){ toast('Das Datum liegt in der Vergangenheit'); return; }
-  const proj = S.projects.find(x => x.id === S.cur);
-  const done = await run(async () => ok(await sb.from('projects').update({settings:{...proj.settings, notice:{text, at:new Date().toISOString(), until}}}).eq('id', proj.id)), 'Hinweis veröffentlicht');
-  if(done && pushIt){
-    try{ const r = await adminCall({admin:'notice', project_id:proj.id}); toast(`Hinweis veröffentlicht, Benachrichtigung an ${r.sent} ${r.sent === 1 ? 'Gerät' : 'Geräte'}`); }
-    catch(e){ toast('Hinweis gespeichert, Benachrichtigung fehlgeschlagen: ' + (e.message || e)); }
-  }
-}
-async function admNoticeClear(){
-  if(!(await ask('Der Hinweis verschwindet bei allen Familien.', {title:'Hinweis entfernen?', ok:'Entfernen', danger:true}))) return;
-  const proj = S.projects.find(x => x.id === S.cur), st = {...proj.settings}; delete st.notice;
-  run(async () => ok(await sb.from('projects').update({settings:st}).eq('id', proj.id)), 'Hinweis entfernt');
-}
-
 /* Nachbar-Statistik (letzte 6 Monate) */
 const buyerKey = s => String(s || '').trim().replace(/\s+/g, ' ').toLowerCase();
 function neighborStats(){
@@ -3003,12 +2956,11 @@ function neighborStats(){
   sales.forEach(l => { const t = l.txId ? p.tx.find(x => x.id === l.txId) : null; const f = (t && t.seller && S.fams.find(x => x.id === t.seller)) || famByUid(l.by) || (l.fam && fam(l.fam)); const name = f ? f.name : '?'; const x = sellers[name] = sellers[name] || {n:0, eggs:0, money:0}; x.n++; x.eggs += l.n; x.money += l.n * (l.price || 0); });
   return {byMonth, customers: Object.values(cust).sort((a, b) => b.eggs - a.eggs || b.orders - a.orders), sellers: Object.entries(sellers).sort((a, b) => b[1].eggs - a[1].eggs)};
 }
-let nbStatOpen = false;
 function admNeighborCard(){
-  const st = nbStatOpen ? neighborStats() : null;
+  const st = isOpen('adm-nb') ? neighborStats() : null, ym = today().slice(0, 7), ms = P().log.filter(l => l.type === 'sale' && l.date.startsWith(ym));
   const mn = ym => new Date(ym + '-01T12:00').toLocaleDateString('de-DE', {month:'short', year:'2-digit'});
-  return `<details class="card list" ${nbStatOpen ? 'open' : ''} ontoggle="if(nbStatOpen!==this.open){nbStatOpen=this.open;render();}">
-    <summary><h2 style="margin:0"><span class="hi" aria-hidden="true">🏡</span>Nachbar-Statistik</h2><span class="muted" style="font-size:14px">6 Monate</span></summary>
+  return `<details class="card list" ${st ? 'open' : ''} ontoggle="setFold('adm-nb',this.open,true)">
+    ${foldHead('🏡', 'Nachbar-Statistik', `${monthName(ym)}: ${ms.length ? `${sum(ms, l => l.n)} Eier verkauft (${ms.length}×)` : 'noch nichts verkauft'}`)}
     ${st ? `<h2 style="font-size:17px;margin:14px 0 4px">Je Monat</h2>
     ${st.byMonth.slice().reverse().map(m => `<div class="item" style="align-items:flex-start"><span>${mn(m.ym)}</span><span style="text-align:right;font-size:14px">${m.eggs} Eier verkauft (${m.sales}×), ${eur(m.money)}<br><span class="muted">${m.orders} ${m.orders === 1 ? 'Bestellung' : 'Bestellungen'}${m.orders ? `: ${m.done} erledigt, ${m.rejected} abgelehnt${m.orders - m.done - m.rejected ? `, ${m.orders - m.done - m.rejected} offen` : ''}` : ''}</span></span></div>`).join('')}
     <h2 style="font-size:17px;margin:14px 0 4px">Stammkunden</h2>
@@ -3034,12 +2986,11 @@ function qualityIssues(){
   const oldOrders = openOrders().filter(o => agoDays(o.created) >= 7);
   return {days: out.reverse(), noState, oldOrders};
 }
-let qualOpen = false;
 function admQualityCard(){
-  const q = qualOpen ? qualityIssues() : null;
-  return `<details class="card list" ${qualOpen ? 'open' : ''} ontoggle="if(qualOpen!==this.open){qualOpen=this.open;render();}">
-    <summary><h2 style="margin:0"><span class="hi" aria-hidden="true">🔍</span>Datenqualität</h2><span class="muted" style="font-size:14px">8 Wochen</span></summary>
-    ${q ? `<h2 style="font-size:17px;margin:14px 0 4px">Auffällige Tage</h2>
+  const q = qualityIssues(), n = q.days.length + q.noState.length + q.oldOrders.length, open = isOpen('adm-qual');
+  return `<details class="card list" ${open ? 'open' : ''} ontoggle="setFold('adm-qual',this.open,true)">
+    ${foldHead('🔍', 'Datenqualität', `${n ? `${n} ${n === 1 ? 'Auffälligkeit' : 'Auffälligkeiten'}` : 'Alles unauffällig'} · 8 Wochen`)}
+    ${open ? `<h2 style="font-size:17px;margin:14px 0 4px">Auffällige Tage</h2>
     ${q.days.length ? q.days.map(x => `<div class="item"><span>${parseD(x.date).toLocaleDateString('de-DE', {weekday:'short', day:'2-digit', month:'2-digit'})}</span><span style="display:flex;align-items:center;gap:8px;font-size:14px">${x.text}<button class="alt small" onclick="sheetDay('${x.date}')">Ansehen</button></span></div>`).join('') : '<p class="muted" style="margin:0">Keine auffälligen Tage.</p>'}
     <h2 style="font-size:17px;margin:14px 0 4px">Verkäufe ohne Zahlungsstand</h2>
     ${q.noState.length ? q.noState.map(t => `<div class="item"><span>${fmtDay(parseD(t.date))} · ${esc(t.desc || 'Einnahme')}</span><span class="pos">${eur(t.amt)}</span></div>`).join('') + '<p class="muted" style="margin:6px 0 0;font-size:14px">Nachtragen in der Kasse mit „Erfassen“.</p>' : '<p class="muted" style="margin:0">Alle Verkäufe haben einen Zahlungsstand.</p>'}
@@ -3050,8 +3001,8 @@ function admQualityCard(){
 function settingsCard(){
   const p = P();
   return `
-  ${S.admin ? `<details class="card" ${setOpen?'open':''} ontoggle="setOpen=this.open">
-    <summary><h2 style="margin:0"><span class="hi" aria-hidden="true">⚙️</span>Einstellungen</h2><span class="pill">nur Admin</span></summary>
+  ${S.admin ? `<details class="card" ${isOpen('adm-set')?'open':''} ontoggle="setFold('adm-set',this.open)">
+    ${foldHead('⚙️', 'Einstellungen', `${isHens() ? 'Stall und Preise, ' : ''}Zahlung, Erfassung`, '<span class="pill">nur Admin</span>')}
   ${isHens() ? `<div>
     <h2 style="font-size:17px;margin:18px 0 8px">Stall</h2>
     <label class="muted" style="display:block">Hennenbestand (die Legeleistung rechnet mit dem Bestand am jeweiligen Tag)</label>
@@ -3083,13 +3034,11 @@ function settingsCard(){
   </details>` : ''}`;
 }
 function dataCard(){
-  return `
-  ${S.admin ? `<div class="card">
-    <h2><span class="hi" aria-hidden="true">💾</span>Daten</h2>
-    <p class="muted" style="margin-top:0">Alle Familien dieses Projekts sehen dieselben Daten. Mit „Sichern“ speicherst du eine Kopie als Datei.</p>
-    ${(() => { const b = backupInfo(); return `<p style="margin:0 0 10px;font-size:14px" class="${b.late ? 'neg' : 'muted'}">${b.d ? `Letzte Sicherung: ${fmtDay(parseD(b.d))}${b.days >= 31 ? ` (vor ${b.days} Tagen, Zeit für eine neue)` : ''}` : 'Noch keine Sicherung gemacht. Bitte jetzt eine speichern.'}</p>`; })()}
-    <button class="alt" style="width:100%" onclick="exportData()">Sichern</button>
-  </div>` : ''}`;
+  if(!S.admin) return '';
+  const b = backupInfo(), st = b.d ? `Letzte Sicherung: ${fmtDay(parseD(b.d))}${b.days >= 31 ? ` (vor ${b.days} Tagen, Zeit für eine neue)` : ''}` : 'Noch keine Sicherung gemacht. Bitte jetzt eine speichern.';
+  return foldCard('adm-data', '💾', 'Daten', b.late ? `<span class="neg">${st}</span>` : st, `
+    <p class="muted" style="margin:10px 0 10px">Alle Familien dieses Projekts sehen dieselben Daten. Mit „Sichern“ speicherst du eine Kopie als Datei.</p>
+    <button class="alt" style="width:100%" onclick="exportData()">Sichern</button>`);
 }
 
 /* ================= Start ================= */
