@@ -192,6 +192,22 @@ nav button svg{width:24px;height:24px}
 .step input{flex:1;text-align:center;font-size:20px;font-weight:600;min-width:0}
 .step button{flex:none;width:56px;font-size:26px;line-height:1;padding:0}
 details.info{margin-top:10px}
+.note-warn{margin-top:12px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb, var(--yolk) 28%, transparent);border:1.5px solid var(--yolk);color:var(--ink);font-size:14px;font-weight:500}
+label.tick{display:flex;align-items:center;gap:10px;font-weight:600;margin-top:12px;cursor:pointer}
+label.tick input{width:22px;height:22px;flex:none;margin:0;accent-color:var(--yolk)}
+.vday{border-top:1px solid var(--line)}
+.vday>summary{list-style:none;cursor:pointer;padding:10px 0 10px 18px;position:relative;display:block}
+.vday>summary::-webkit-details-marker{display:none}
+.vday>summary .vs{display:block;font-size:14px;color:var(--muted);margin-top:2px}
+.vday>summary::before{content:'▸';color:var(--muted);position:absolute;left:0;top:10px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chips button{flex:none;padding:6px 12px;border-radius:99px;font-size:14px;background:var(--bg);color:var(--ink);border:1.5px solid var(--line)}
+.chips button.on{background:var(--yolk);color:var(--yolk-ink);border-color:var(--yolk)}
+.vday[open]>summary::before{content:'▾'}
+.vday .item{padding:8px 0 8px 14px}
+.vgrp>summary{list-style:none;cursor:pointer}
+.vgrp>summary::-webkit-details-marker{display:none}
+.vgrp .item{padding-left:28px}
 details.info>summary{list-style:none;cursor:pointer;color:var(--muted);font-size:14px;display:inline-block;padding:4px 0}
 details.info>summary::-webkit-details-marker{display:none}
 details.info[open]>summary{margin-bottom:4px}
@@ -206,6 +222,9 @@ nav button[aria-current="page"]{color:var(--ink);background:color-mix(in srgb,va
 .seg{display:flex;gap:8px}
 .seg button{flex:1;background:var(--bg);color:var(--ink);border:1.5px solid var(--line)}
 .seg button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.fmchips{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 10px}
+.fmchips button{background:var(--bg);color:var(--ink);border:1.5px solid var(--line);border-radius:99px;padding:6px 14px;font-size:14px;font-weight:600}
+.fmchips button.on{background:var(--yolk);color:var(--yolk-ink);border-color:var(--yolk)}
 .empty{color:var(--muted);text-align:center;padding:14px 0}
 .toast.undo{display:flex;align-items:center;gap:12px;padding:8px 8px 8px 16px;z-index:40;max-width:94vw}
 .toast.undo button{background:var(--yolk);color:var(--yolk-ink);border-radius:99px;padding:6px 14px;font-size:14px;font-weight:700;flex:none}
@@ -405,7 +424,7 @@ async function loadProject(){
     lastBackup: st.last_backup || '',
     batFence: st.battery_fence || '',
     batDoor: st.battery_door || '',
-    log: log.data.map(l => ({id:l.id,type:l.type,date:l.date,n:l.n,fam:l.family_id,buyer:l.buyer,price:l.price===null?null:Number(l.price),txId:l.tx_id,auto:l.auto,by:l.created_by,at:l.created_at})),
+    log: log.data.map(l => ({id:l.id,type:l.type,date:l.date,n:l.n,fam:l.family_id,buyer:l.buyer,price:l.price===null?null:Number(l.price),txId:l.tx_id,auto:l.auto,by:l.created_by,at:l.created_at,note:l.note||'',prev:l.prev??null})),
     tx: tx.data.map(t => ({id:t.id,date:t.date,kind:t.kind,amt:Number(t.amount),desc:t.description,fam:t.family_id,seller:t.seller_id,method:t.pay_method,state:t.pay_state,parent:t.parent_id,by:t.created_by,at:t.created_at,confirmedAt:t.confirmed_at,confirmedBy:t.confirmed_by})),
     swaps, checks,
     door: {history: dr.data.map(d => ({date:d.changed_on,open:String(d.opens_at).slice(0,5),close:String(d.closes_at).slice(0,5),fam:d.family_id,note:d.note}))},
@@ -414,7 +433,7 @@ async function loadProject(){
     supplies: su.data.map(s => ({id:s.id,name:s.name,days:s.days,set:s.set_on})),
     events: ev.data.map(e => ({id:e.id,date:e.date,end:e.end_date||'',title:e.title,kind:e.kind,fam:e.family_id||'',note:e.note,by:e.created_by})),
     cashChecks: cc.data.map(c => ({id:c.id, at:c.created_at, by:c.created_by, balance:Number(c.paypal_balance), expected:Number(c.expected), openCash:Number(c.open_cash), note:c.note})),
-    orders: od.data.map(o => ({id:o.id, created:o.created_at, buyer:o.buyer, qty:o.qty, status:o.status}))
+    orders: od.data.map(o => ({id:o.id, created:o.created_at, buyer:o.buyer, qty:o.qty, status:o.status, needBy:o.need_by||null}))
   };
   const paths = S.p.animals.filter(a => a.photoPath).map(a => a.photoPath);
   if(paths.length){
@@ -523,7 +542,9 @@ const actions = ok => `<div class="actions"><button class="alt" onclick="closeSh
 /* ================= HÜHNER: Eier ================= */
 const laidOn = d => sum(P().log.filter(l=>l.type==='laid'&&l.date===d), l=>l.n);
 const isLive = d => !P().live || d >= P().live;
-const stock = () => sum(P().log.filter(l => isLive(l.date)), l => l.type==='laid' ? l.n : l.type==='verzicht' ? 0 : -l.n);
+// Wirkung eines Eintrags auf den Vorrat; „korrektur“ = Übertrag von Hand korrigiert (n mit Vorzeichen)
+const eggDelta = l => l.type==='laid' || l.type==='korrektur' ? l.n : l.type==='verzicht' ? 0 : -l.n;
+const stock = () => sum(P().log.filter(l => isLive(l.date)), eggDelta);
 const laidLive = () => sum(P().log.filter(l => l.type==='laid' && isLive(l.date)), l => l.n);
 async function dutyCheck(date, was){
   const mon = monday(parseD(date)), dutyId = dutyFam(mon);
@@ -561,7 +582,6 @@ async function addLaid(n, date, manual){
 }
 function vEier(){
   const p = P(), t = today(), n = laidOn(t), st = stock(), wkLaid = weekStats(monday(new Date())).laid, dutyF = dutyFam(monday(new Date()));
-  const recent = [...p.log].sort((a,b)=> b.date.localeCompare(a.date) || String(b.at||'').localeCompare(String(a.at||'')) || String(b.id).localeCompare(String(a.id))).slice(0,20);
   return `${dutyNote()}
   <div class="card hero">
     <div class="duty ${dutyF===S.me?'mine':''}"><span>Dienst KW ${isoWeek(monday(new Date()))}</span><b>${esc(fam(dutyF).name)}</b></div>
@@ -574,15 +594,79 @@ function vEier(){
   ${ordersCard()}
   ${weekCard()}
   ${statCard()}
-  <details class="card list" ${verlaufOpen?'open':''} ontoggle="verlaufOpen=this.open">
+  <details class="card list" ${verlaufOpen?'open':''} ontoggle="if(verlaufOpen!==this.open){verlaufOpen=this.open;render()}">
     <summary><h2 style="margin:0"><span class="hi" aria-hidden="true">🕘</span>Verlauf</h2></summary>
-    <div style="margin-top:10px">${recent.length ? recent.map(l=>`<div class="item"><div>${logText(l)}<div class="muted">${logMeta(l, true)}</div></div><button class="ghost" onclick="delLog('${l.id}')" aria-label="Löschen">✕</button></div>`).join('') : '<div class="empty">Noch nichts eingetragen. Tippe aufs Ei!</div>'}</div>
+    ${verlaufOpen ? verlaufBody() : ''}
   </details>
 `;
 }
 
+/* ---- Verlauf: pro Tag zusammengefasst, mit Zeitraum und Art ---- */
+let verlaufOpen = false, vlDays = 7, vlKind = 'alle', vlOpen = {};
+const VL_KINDS = [['alle','Alle'],['laid','Gelegt'],['take','Genommen'],['sale','Verkäufe'],['korr','Korrekturen']];
+const vlDay = l => l.type === 'korrektur' && l.at ? ds(new Date(l.at)) : l.date;     // Korrektur unter dem Tag, an dem sie gemacht wurde
+const vlKindOf = l => l.type === 'laid' ? (l.auto === false && l.by ? 'nach' : 'laid') : l.type === 'take' || l.type === 'zusatz' ? 'take' : l.type === 'sale' ? 'sale' : l.type === 'korrektur' ? 'korr' : 'x';
+const vlMatch = l => vlKind === 'alle' || vlKindOf(l) === vlKind || (vlKind === 'laid' && vlKindOf(l) === 'nach') || (vlKind === 'korr' && vlKindOf(l) === 'nach');
+function vlSet(k, v){ if(k === 'days') vlDays = v; else vlKind = v; render(); }
+function vlTog(d, open){ vlOpen[d] = open; }
+function vlSums(ls){
+  const n = f => sum(ls.filter(f), l => l.n);
+  return {laid: n(l => l.type === 'laid'), take: n(l => l.type === 'take' || l.type === 'zusatz'), sale: n(l => l.type === 'sale'), korr: ls.filter(l => l.type === 'korrektur').length, nach: n(l => vlKindOf(l) === 'nach')};
+}
+function vlSumText(x){
+  const parts = [];
+  if(vlKind === 'alle' || vlKind === 'laid') parts.push(`🥚 ${x.laid} gelegt`);
+  if(vlKind === 'alle' || vlKind === 'take') parts.push(`👪 ${x.take} genommen`);
+  if(vlKind === 'alle' || vlKind === 'sale') parts.push(`💶 ${x.sale} verkauft`);
+  if(x.korr && (vlKind === 'alle' || vlKind === 'korr')) parts.push(`✎ ${x.korr} Übertrag-Korrektur${x.korr === 1 ? '' : 'en'}`);
+  if(x.nach && vlKind === 'korr') parts.push(`➕ ${x.nach} nachgetragen`);
+  return parts.join(' · ');
+}
+const vlMeta = l => { if(l.type !== 'korrektur') return logMeta(l, false); const m = parseD(l.date); m.setDate(m.getDate() + 1);
+  return [l.at ? hm(l.at) + ' Uhr' : '', (famByUid(l.by) || {}).name || '', `Übertrag in KW ${isoWeek(m)}`].filter(Boolean).join(' · '); };
+const vlItem = l => `<div class="item"><div>${logText(l)}<div class="muted" style="font-size:14px">${vlMeta(l) || '&nbsp;'}</div></div><button class="ghost" onclick="delLog('${l.id}')" aria-label="Löschen">✕</button></div>`;
+const hm = at => at ? new Date(at).toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'}) : '';
+// Gezählte Eier (je Tipp ein Eintrag) einer Person werden zu einer Zeile zusammengefasst, aufklappbar zu den Einzel-Einträgen
+function vlDayBody(ls){
+  const out = [], seen = new Set();
+  ls.forEach(l => {
+    if(seen.has(l.id)) return;
+    if(l.type === 'laid' && l.auto !== false){
+      const grp = ls.filter(x => x.type === 'laid' && x.auto !== false && x.by === l.by);
+      grp.forEach(x => seen.add(x.id));
+      if(grp.length > 1){
+        const n = sum(grp, x => x.n), f = famByUid(l.by), ts = grp.map(x => hm(x.at)).filter(Boolean).sort();
+        out.push(`<details class="vgrp"><summary class="item"><div>${n} Eier gelegt <span class="muted">▾ einzeln</span><div class="muted" style="font-size:14px">${[ts.length ? (ts[0] === ts[ts.length-1] ? ts[0] : `${ts[0]}–${ts[ts.length-1]}`) + ' Uhr' : '', f ? f.name : ''].filter(Boolean).join(' · ')}</div></div></summary>${grp.map(vlItem).join('')}</details>`);
+        return;
+      }
+    }
+    seen.add(l.id); out.push(vlItem(l));
+  });
+  return out.join('');
+}
+function verlaufBody(){
+  const p = P(), t = today(), from = new Date(); from.setDate(from.getDate() - (vlDays - 1)); const fromS = Number.isFinite(vlDays) ? ds(from) : '';
+  const all = p.log.filter(vlMatch), inR = all.filter(l => vlDay(l) >= fromS);
+  const older = all.some(l => vlDay(l) < fromS);
+  const byDay = {}; inR.forEach(l => (byDay[vlDay(l)] = byDay[vlDay(l)] || []).push(l));
+  const days = Object.keys(byDay).sort().reverse();
+  const seg = (k, opts, cur) => `<div class="seg" style="margin:8px 0 0">${opts.map(([v, lbl]) => `<button class="${cur === v ? 'on' : ''}" onclick="vlSet('${k}', ${typeof v === 'number' ? v : `'${v}'`})">${lbl}</button>`).join('')}</div>`;
+  const rangeLbl = !Number.isFinite(vlDays) ? 'Alles' : vlDays === 1 ? 'Heute' : `Letzte ${vlDays} Tage`;
+  const tot = vlSums(inR);
+  return `<div style="margin-top:6px">
+    ${seg('days', [[7,'7 Tage'],[30,'30 Tage'],[Infinity,'Alles']], vlDays)}
+    <div class="chips">${VL_KINDS.map(([v, lbl]) => `<button class="${vlKind === v ? 'on' : ''}" onclick="vlSet('kind','${v}')">${lbl}</button>`).join('')}</div>
+    <p class="muted" style="margin:10px 0 4px;font-size:14px"><b>${rangeLbl}:</b> ${vlSumText(tot)}</p>
+    ${days.length ? days.map(d => {
+      const ls = byDay[d].sort((a,b) => String(b.at||'').localeCompare(String(a.at||'')) || String(b.id).localeCompare(String(a.id)));
+      const open = d in vlOpen ? vlOpen[d] : d === t;
+      return `<details class="vday" ${open ? 'open' : ''} ontoggle="vlTog('${d}', this.open)"><summary><strong>${d === t ? 'Heute' : parseD(d).toLocaleDateString('de-DE', {weekday:'short', day:'numeric', month:'short'})}</strong><span class="vs">${vlSumText(vlSums(ls))}</span></summary>${vlDayBody(ls)}</details>`;
+    }).join('') : `<div class="empty">${p.log.length ? 'In diesem Zeitraum gibt es keine passenden Einträge.' : 'Noch nichts eingetragen. Tippe aufs Ei!'}</div>`}
+    ${older ? `<button class="ghost" style="margin-top:8px" onclick="vlSet('days', ${vlDays} + ${vlDays < 30 ? 7 : 30})">Ältere Tage laden</button>` : ''}
+  </div>`;
+}
+
 /* ---- Statistik (Tage / Wochen / Monate) ---- */
-let verlaufOpen = false;
 let statView = 'tage', statOff = 0;
 function statNav(k){ statOff = Math.min(0, statOff + k); render(); }
 function eggsByDay(){ const m = {}; P().log.forEach(l => { if(l.type === 'laid') m[l.date] = (m[l.date] || 0) + l.n; }); return m; }
@@ -686,14 +770,16 @@ function ordersCard(){
   const done = all.filter(o => !orderLive(o)).slice(-8).reverse();
   if(!all.length) return '';
   const eggs = n => `${n} Ei${n===1?'':'er'}`;
+  // Frist vom Nachbarn („Spätestens benötigt bis“), nur wenn angegeben
+  const need = o => o.needBy ? `<div style="margin-top:4px;padding:3px 10px;border-radius:8px;display:inline-block;background:color-mix(in srgb, var(--yolk) 28%, transparent);color:var(--ink);font-weight:600">⏰ Benötigt bis: ${whenText(o.needBy)}</div>` : '';
   const DONE = {erledigt:'verkauft', abgelehnt:'abgelehnt', verfallen:'verfallen', offen:'verfallen'};
   return `
   <div class="card list" ${open.length?'style="border:2px solid var(--yolk)"':''}>
     <h2><span class="hi" aria-hidden="true">🛒</span>Bestellungen von Nachbarn</h2>
     ${open.length ? open.map(o => q[o.id].ready
-      ? `<div class="item"><div><strong>${esc(o.buyer)}</strong> <span class="pill">bereit</span><div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div></div>
-      <div style="display:flex;align-items:center;gap:6px"><button class="yolk small" onclick="sheetSale('${o.id}')">Verkauft</button><button class="ghost" onclick="orderReject('${o.id}')" aria-label="Bestellung ablehnen">✕</button></div></div>`
-      : `<div class="item" style="flex-direction:column;align-items:stretch;gap:8px"><div class="row"><div><strong>${esc(o.buyer)}</strong> <span class="muted">wartet · Platz ${q[o.id].pos}</span><div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div></div><button class="ghost" onclick="orderReject('${o.id}')" aria-label="Bestellung ablehnen">✕</button></div>
+      ? `<div class="item"><div><strong>${esc(o.buyer)}</strong> <span class="pill">bereit</span><div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div>${need(o)}</div>
+      <div style="display:flex;align-items:center;gap:6px"><button class="yolk small" onclick="sheetSale('${o.id}')">Verkaufen</button><button class="ghost" onclick="orderReject('${o.id}')" aria-label="Bestellung ablehnen">✕</button></div></div>`
+      : `<div class="item" style="flex-direction:column;align-items:stretch;gap:8px"><div class="row"><div><strong>${esc(o.buyer)}</strong> <span class="muted">wartet · Platz ${q[o.id].pos}</span><div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div>${need(o)}</div><button class="ghost" onclick="orderReject('${o.id}')" aria-label="Bestellung ablehnen">✕</button></div>
       </div>`).join('')
       : '<div class="empty">Keine offenen Bestellungen.</div>'}
     ${open.some(o => !q[o.id].ready) ? `<p class="muted" style="margin:8px 0 0">Wartende Bestellungen werden der Reihe nach bereit, sobald genug Eier im Vorrat sind. Nach ${ORDER_DAYS} Tagen verfällt eine Bestellung.</p>` : ''}
@@ -774,13 +860,14 @@ function weekNav(k){ weekOff = Math.min(0, weekOff + k); render(); }
 function weekCard(){
   const p = P(), q = quota(), m = monday(new Date()), w = weekStats(m);
   const sp = surplusParts(m), avail = sp.surplus;
-  const short = Math.max(0, w.total - w.laid), oq = orderQueue(), openQty = sum(openOrders().filter(o => oq.q[o.id].ready), o => o.qty), waitN = openOrders().length - openOrders().filter(o => oq.q[o.id].ready).length;
+  const short = Math.max(0, w.total - w.laid), oq = orderQueue(), readyO = openOrders().filter(o => oq.q[o.id].ready), openQty = sum(readyO, o => o.qty), waitN = openOrders().length - readyO.length;
   return `
   <div class="card">
     <h2><span class="hi" aria-hidden="true">🥚</span>Vorrat &amp; Verkauf</h2>
     <div class="stock"><span class="big">${stock()}</span><span>Eier im Vorrat</span></div>
+    ${openQty>0 ? `<p style="margin:4px 0 0">davon <b>${openQty} für ${readyO.length===1 ? esc(readyO[0].buyer) : 'Bestellungen'} reserviert</b></p>` : ''}
+    ${stockCalc(m)}
     ${(() => { const f = weekForecast(); return f.restDays > 0 ? `<p class="muted" style="margin:6px 0 0">Bis Sonntag noch etwa ${f.more} Eier zu erwarten - ${f.left >= 0 ? 'reicht für alle' : `es fehlen etwa <b>${-f.left}</b>`}</p>` : ''; })()}
-    ${openQty>0 ? `<p class="muted" style="margin:4px 0 0">Von Nachbarn bestellt: ${openQty}</p>` : ''}
     ${waitN>0 ? `<p class="muted" style="margin:4px 0 0">Auf der Warteliste: ${waitN}</p>` : ''}
     <div style="margin-top:12px">
       <div class="row"><span>Preis intern (Familien)</span><strong>${eur(internPrice())}${typeof p.priceIntern==='number'?'':' · Selbstkosten'}</strong></div>
@@ -803,6 +890,51 @@ function weekCard(){
         <button class="${f.id===S.me?'yolk':'alt'} small" onclick="sheetTake('${f.id}',${left||1})">Entnehmen</button>
         </div>`; }).join('')}</div>
   </div>`}`;
+}
+// Einklappbare Rechnung unter dem Vorrat: Übertrag + gelegt − genommen − verkauft = Vorrat (wie stock(), nur ab Live-Start)
+function stockCalc(m){
+  const s = ds(m), lg = P().log.filter(l => isLive(l.date)), wk = lg.filter(l => l.date >= s);
+  const carry = sum(lg.filter(l => l.date < s), eggDelta);
+  const n = t => sum(wk.filter(l => l.type === t), l => l.n), L = n('laid'), T = n('take'), Z = n('zusatz'), V = n('sale');
+  const r = (label, v) => `<div class="row" style="margin-top:4px"><span>${label}</span><strong>${v}</strong></div>`;
+  const last = carryFixes().filter(l => l.date < s).slice(-1)[0], fixedNow = last && last.date === carryDate(m);
+  return `<details class="info" ${fixedNow ? 'open' : ''}><summary>ⓘ Wie kommen die ${stock()} zustande?</summary>
+    <div class="row" style="margin-top:4px"><span>Übertrag aus Vorwochen</span><span style="display:flex;align-items:center;gap:6px"><strong>${carry}</strong><button class="ghost small" onclick="sheetCarry()" aria-label="Übertrag korrigieren" title="Übertrag korrigieren">✎</button></span></div>
+    ${fixedNow ? `<p class="muted" style="margin:0 0 2px;font-size:14px">Übertrag manuell korrigiert (zuletzt ${whenFix(last)})</p>` : ''}${r('+ diese Woche gelegt', L)}${r('− von Familien genommen', T)}${Z ? r('− Zusatz-Eier (bezahlt)', Z) : ''}${r('− an Nachbarn verkauft', V)}
+    <div class="row" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--line)"><span>= im Vorrat</span><strong>${carry + L - T - Z - V}</strong></div></details>`;
+}
+/* ---- Übertrag korrigieren (jede Familie darf, steht im Verlauf) ----
+   Gespeichert als egg_log-Eintrag type 'korrektur' am Sonntag vor der laufenden Woche, n = Differenz (mit Vorzeichen),
+   prev = Übertrag vorher, note = Grund. So rechnen Vorrat, Überschuss (DB app.hens_surplus) und Bestellungen mit dem neuen Wert. */
+const carryFixes = () => P().log.filter(l => l.type === 'korrektur');
+function carryDate(m){ const d = new Date(m); d.setDate(d.getDate() - 1); return ds(d); }
+function carryNow(){
+  const s = ds(monday(new Date()));
+  return sum(P().log.filter(l => isLive(l.date) && l.date < s), eggDelta);
+}
+function whenFix(l){
+  const t = l.at ? new Date(l.at) : null, f = famByUid(l.by);
+  return [t ? `${fmtDay(t)}, ${t.toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'})} Uhr` : '', f ? f.name : ''].filter(Boolean).join(' · ');
+}
+function sheetCarry(){
+  const c = carryNow();
+  openSheet('Übertrag korrigieren', `<p class="muted" style="margin:0">Der Übertrag sind die Eier, die aus den Vorwochen noch da sein sollten. Stimmt er nicht (etwa weil Eier nicht an die nächste Dienst-Familie weitergegeben wurden), trag hier ein, wie viele wirklich da waren.</p>
+    <div class="row" style="margin-top:10px"><span>Bisher berechnet</span><strong>${c}</strong></div>
+    <label>Richtiger Übertrag</label>${stepper('cn', Math.max(0, c), 0)}
+    <label>Grund</label><textarea id="cg" rows="2" oninput="carryReady()"></textarea>
+    <p class="muted" style="margin:6px 0 0">Die Änderung steht mit Name, Uhrzeit und Grund im <b>Verlauf</b> (Filter <b>Korrekturen</b>). Vorrat und freie Eier für Bestellungen rechnen sofort mit dem neuen Wert.</p>
+    <div class="actions"><button class="alt" onclick="closeSheet()">Abbrechen</button><button class="yolk" id="cok" onclick="doCarry()" disabled>Speichern</button></div>`);
+}
+function carryReady(){ const b = document.getElementById('cok'); if(b) b.disabled = !String(val('cg')).trim(); }
+async function doCarry(){
+  const note = String(val('cg')).trim(), want = Math.max(0, Math.floor(num(val('cn')))), cur = carryNow(), diff = want - cur;
+  if(!note){ toast('Bitte einen Grund angeben.'); return; }
+  if(!diff){ toast('Der Übertrag ist schon ' + cur + '.'); return; }
+  const p = P(), d = carryDate(monday(new Date()));
+  if(p.live && d < p.live){ toast('Vor dem Live-Start gibt es keinen Übertrag.'); return; }
+  closeSheet();
+  run(async () => ok(await sb.from('egg_log').insert({project_id:p.id, date:d, type:'korrektur', n:diff, note, prev:cur})),
+    `Übertrag ${cur} → ${want} gespeichert`);
 }
 // Kopf der Wochenkarte mit Blättern (◀ frühere Woche, ▶ zurück Richtung heute)
 function weekHead(m, title){
@@ -874,7 +1006,7 @@ function internPrice(){
 function surplusParts(m){
   const p = P(), q = quota(), s = ds(m), e = new Date(m); e.setDate(e.getDate() + 6); const es = ds(e), w = weekStats(m);
   const reserved = 0;   // seit 03.11.2026 wird nichts mehr für die Familien zurückgelegt: alles im Vorrat ist verkäuflich
-  const carry = Math.max(0, sum(p.log.filter(l => isLive(l.date) && l.date < s), l => l.type==='laid' ? l.n : l.type==='verzicht' ? 0 : -l.n));
+  const carry = Math.max(0, sum(p.log.filter(l => isLive(l.date) && l.date < s), eggDelta));
   const inW = p.log.filter(l => isLive(l.date) && l.date >= s && l.date <= es);
   const L = sum(inW.filter(l => l.type==='laid'), l => l.n), T = sum(inW.filter(l => l.type==='take'), l => l.n), V = sum(inW.filter(l => l.type==='sale' || l.type==='zusatz'), l => l.n);
   const total = Math.max(0, carry + L - T - V), oldRem = Math.max(0, carry - V), newRem = L - T - Math.max(0, V - carry);
@@ -927,6 +1059,7 @@ function logMeta(l, withDate){
   return parts.join(' · ');
 }
 function logText(l){
+  if(l.type==='korrektur') return `Übertrag korrigiert: ${l.prev ?? '?'} → ${l.prev == null ? (l.n > 0 ? '+' : '') + l.n : l.prev + l.n}${l.note ? `<div class="muted" style="font-size:14px">Grund: ${esc(l.note)}</div>` : ''}`;
   if(l.type==='verzicht') return `${esc(fam(l.fam).name)} verzichtet auf ${l.n} Ei${l.n===1?'':'er'} (diese Woche)`;
   if(l.type==='zusatz') return `${esc(fam(l.fam).name)} nimmt ${l.n} Zusatz-Ei${l.n===1?'':'er'} · ${eur(l.n*l.price)}`;
   if(l.type==='laid') return `${l.n} Ei${l.n===1?'':'er'} gelegt`;
@@ -950,9 +1083,13 @@ function sheetTake(fid, n, d0){
   openSheet(d0 ? 'Entnahme nachtragen' : 'Eier entnehmen', `<label>Wer nimmt Eier?</label><select id="f">${famOptions(fid)}</select>
     <label>Anzahl</label>${stepper('n', n||6, 1)}
     <label>Datum</label><input id="d" type="date" value="${d0||today()}" min="${takeMin()}" max="${today()}">
-    <p class="muted" style="margin:6px 0 0">Die ersten ${quota()} Eier pro Woche sind frei, für weitere zahlt die Familie den internen Preis. Für die Vorwoche wähle ein Datum aus dieser Woche.</p>` + actions('doTake()'));
+    <p class="muted" style="margin:6px 0 0">Die ersten ${quota()} Eier pro Woche sind frei, für weitere zahlt die Familie den internen Preis. Für die Vorwoche wähle ein Datum aus dieser Woche.</p>
+    <div class="note-warn">⚠ Nur eintragen, wenn die Eier wirklich schon übergeben wurden. Eingetragene Eier fehlen sofort im Vorrat und können offene Bestellungen blockieren.</div>
+    <label class="tick"><input type="checkbox" id="tk" onchange="document.getElementById('tok').disabled=!this.checked"> Die Eier wurden schon ausgeteilt</label>
+    <div class="actions"><button class="alt" onclick="closeSheet()">Abbrechen</button><button class="yolk" id="tok" onclick="doTake()" disabled>Speichern</button></div>`);
 }
 async function doTake(){
+  const tk = document.getElementById('tk'); if(tk && !tk.checked){ toast('Bitte bestätigen, dass die Eier schon ausgeteilt wurden.'); return; }
   const n=Math.floor(num(val('n'))), date = val('d') || today(), f = val('f'); if(n<1) return;
   if(date > today() || date < takeMin()){ toast(`Datum geht nur von ${fmtDay(parseD(takeMin()))} bis heute.`); return; }
   if(date === today() && n>stock() && !(await ask(`Im Vorrat sind nur ${stock()} Eier. Möchtest du trotzdem ${n} eintragen?`, {title:'Nicht genug Eier im Vorrat', ok:'Trotzdem eintragen'}))) return;
@@ -1339,7 +1476,7 @@ function sheetDay(s){
     ${evs.map(e=>`<div class="item"><div><strong>${esc(e.title)}</strong> <span class="pill">${esc(e.kind)}</span>${e.fam?`<div class="muted">${esc(fam(e.fam).name)}</div>`:''}</div>
       ${canEditEvent(e)?`<button class="alt small" onclick="sheetEvent('${e.id}')">Ändern</button>`:''}</div>`).join('')}
     ${isHens() ? logs.map(l=>`<div class="item"><div>${logText(l)}${logMeta(l,false)?`<div class="muted" style="font-size:14px">${logMeta(l,false)}</div>`:''}</div>
-      ${can?`<div style="display:flex;gap:4px"><button class="alt small" onclick="sheetEditLog('${l.id}')">Ändern</button><button class="ghost" onclick="delLogDay('${l.id}','${s}')" aria-label="Löschen">✕</button></div>`:lock}</div>`).join('') : ''}
+      ${can?`<div style="display:flex;gap:4px">${l.type==='korrektur'?'':`<button class="alt small" onclick="sheetEditLog('${l.id}')">Ändern</button>`}<button class="ghost" onclick="delLogDay('${l.id}','${s}')" aria-label="Löschen">✕</button></div>`:lock}</div>`).join('') : ''}
     ${txs.map(t=>`<div class="item"><div>${esc(t.desc||t.kind)}<div class="muted">${txMeta(t)} · ${txAmt(t)}</div></div>
       ${!can ? lock : linked(t.id) ? '<span class="muted" style="font-size:14px">über Eier-Eintrag ändern</span>'
         : (t.kind==='einzahlung'||t.kind==='auszahlung') ? `<button class="ghost" onclick="delTxDay('${t.id}','${s}')" aria-label="Löschen">✕</button>`
@@ -1543,11 +1680,13 @@ function vKasse(){
       <button class="alt small" onclick="bookSettlement('${x.fam}','${x.dir}',${x.amt.toFixed(2)})">${x.dir==='in'?'Eingezahlt':'Ausgezahlt'}</button></div>`).join('')}</div>` : '<div class="muted" style="margin-top:8px">Alles ausgeglichen.</div>'}
     </div>
   </details>
-  <div class="card list">
-    <h2><span class="hi" aria-hidden="true">🧾</span>Buchungen</h2>
+  <details class="card list" ${txOpen?'open':''} ontoggle="txOpen=this.open">
+    ${foldHead('🧾', 'Buchungen', txs.length ? `${txs.length + txMore} ${txs.length + txMore === 1 ? 'Eintrag' : 'Einträge'} · letzte: ${esc(txs[0].desc || txs[0].kind)}, ${fmtDay(parseD(txs[0].date))}` : 'Noch keine')}
+    <div style="margin-top:6px">
     ${txs.length ? txs.map(t => txRow(t)).join('') : emptyState('🧾', 'Noch keine Buchungen. Mit „Buchung hinzufügen“ trägst du Einnahmen und Ausgaben ein.')}
     ${txMore > 0 ? `<button class="alt" style="width:100%;margin-top:10px" onclick="txShow+=20;render()">Ältere Buchungen anzeigen (noch ${txMore})</button>` : ''}
-  </div>`;
+    </div>
+  </details>`;
 }
 /* ================= Zahlungsstatus, Kontrolle und Kassenabgleich ================= */
 const actions2 = (ok, label) => `<div class="actions"><button class="alt" onclick="closeSheet()">Abbrechen</button><button class="yolk" onclick="${ok}">${label}</button></div>`;
@@ -1786,7 +1925,7 @@ function saleCalc(){
   rc.value = money(Math.floor(num(val('n'))) * num(val('p')));
 }
 let txKind='ausgabe';
-let kasseOpen = false, setOpen = false, txShow = 15;
+let kasseOpen = false, setOpen = false, txShow = 15, txOpen = false;
 const payerOptions = sel => members().map(f => `<option value="${f.id}" ${sel!==null && f.id===(sel||defFam())?'selected':''}>${esc(f.name)}</option>`).join('')
   + `<option value="" ${sel===null?'selected':''}>Gemeinschaftskasse</option>`;
 function sheetTx(d0){
@@ -1871,7 +2010,9 @@ function payMessage(x){
   const tier = isHens() ? '🐔' : '🐐';
   const dank = x.purpose ? `Vielen Dank für ${x.purpose} vom Rainäcker Hof! 🥚` : 'Vielen Dank für deinen Einkauf beim Rainäcker Hof! 🥚';
   const betrag = x.amount > 0 ? ` (${eur(x.amount)})` : '';
-  return `${x.buyer ? `Hallo ${x.buyer}!` : 'Hallo!'} ${tier}\n${dank}\n\nDu kannst ganz bequem per PayPal bezahlen${betrag}:\n👉 ${x.link}\n\nLiebe Grüße vom Rainäcker Hof 💛`;
+  const name = (x.buyer || '').trim();
+  const anrede = !name ? 'Hallo!' : /^familie\s/i.test(name) ? `Hallo ${name}!` : `Hallo Familie ${name}!`;
+  return `${anrede} ${tier}\n${dank}\n\nDu kannst ganz bequem per PayPal bezahlen${betrag}:\n👉 ${x.link}\n\nLiebe Grüße vom Rainäcker Hof 💛`;
 }
 function sheetPay(o){
   if(!P().paypal && !S.admin){ toast('Der Admin muss zuerst den PayPal.me-Namen eintragen'); return; }
@@ -2118,12 +2259,14 @@ function pushCard(){
     : st === 'ios-installieren' ? `<p class="muted" style="margin:0">Auf dem iPhone geht das nur, wenn die App auf dem Home-Bildschirm liegt (iOS 16.4 oder neuer): Teilen-Symbol, dann „Zum Home-Bildschirm“. Öffne die App danach von dort.</p>`
     : st === 'unbekannt' ? `<p class="muted" style="margin:0">Einen Moment …</p>`
     : `<p class="muted" style="margin:0">Dieses Gerät oder dieser Browser unterstützt keine Benachrichtigungen. Sie funktionieren nur in der veröffentlichten App (https).</p>`;
+  const short = st === 'an' ? `Auf diesem Handy: an${push.reminders ? '' : ', Erinnerungen aus'}` : st === 'aus' ? 'Auf diesem Handy: aus'
+    : st === 'blockiert' ? 'Auf diesem Handy: blockiert' : st === 'unbekannt' ? '' : 'Auf diesem Handy: nicht möglich';
   return `
-  <div class="card">
-    <h2><span class="hi" aria-hidden="true">🔔</span>Benachrichtigungen</h2>
-    <p class="muted" style="margin:0 0 10px">Eine Nachricht aufs Handy, sobald ein Nachbar Eier bestellt. Jede Familie schaltet das auf ihrem eigenen Handy ein.</p>
+  <details class="card" ${hofOpen.push?'open':''} ontoggle="hofOpen.push=this.open">
+    ${foldHead('🔔', 'Benachrichtigungen', short)}
+    <p class="muted" style="margin:10px 0 10px">Eine Nachricht aufs Handy, sobald ein Nachbar Eier bestellt. Jede Familie schaltet das auf ihrem eigenen Handy ein.</p>
     ${body}
-  </div>`;
+  </details>`;
 }
 
 /* ================= Familien verwalten (nur Verwalter) ================= */
@@ -2271,7 +2414,16 @@ function saveSetting(patch){
 }
 /* ---- Änderungsprotokoll ---- */
 let audit = {rows:[], done:false, open:false};
-function closeAudit(){ audit = {rows:[], done:false, open:false}; render(); }
+function closeAudit(){ audit = {rows:[], done:false, open:false, last:audit.last}; render(); }
+function auditToggle(open){ if(open === audit.open) return; if(open) loadAudit(true); else closeAudit(); }
+// Kurzstatus der eingeklappten Karte: nur der neueste Eintrag
+async function loadAuditLast(){
+  if(audit.last !== undefined || audit.lastBusy) return;
+  audit.lastBusy = true; const a = audit;
+  try{ const r = await ok(await sb.from('audit_log').select('changed_at,family_name').eq('project_id', S.cur).order('changed_at', {ascending:false}).limit(1)); a.last = r[0] || null; }
+  catch(e){ a.last = null; }
+  a.lastBusy = false; if(a === audit) render();
+}
 const TLABEL = {egg_log:'Eier', transactions:'Buchung', duty_swaps:'Dienst', door_times:'Türzeiten', animals:'Tier', health_entries:'Gesundheit', supplies:'Vorrat', calendar_events:'Termin', projects:'Einstellungen', egg_orders:'Bestellung', cash_checks:'Kassenabgleich', families:'Familie'};
 const FLABEL = {n:'Anzahl', qty:'Menge', status:'Status', date:'Datum', price:'Preis', amount:'Betrag', description:'Text', family_id:'Familie', kind:'Art', week_start:'Woche', title:'Titel', note:'Notiz', name:'Name', days:'Tage', done:'erledigt', buyer:'Käufer', type:'Typ', animal:'Tier', next_due:'Nächster Termin', born:'geboren', due:'erwartet', opens_at:'Öffnet', closes_at:'Schließt', end_date:'Bis', changed_on:'Datum', set_on:'aufgefüllt am', pay_method:'Zahlungsart', is_admin:'Verwalter', projekte:'Projekte', zugang:'Zugangscode', login:'Anmeldung', left_on:'ausgetreten am', pay_state:'Zahlungsstand', seller_id:'Familie', paypal_balance:'PayPal-Konto', expected:'Soll', open_cash:'Bargeld offen'};
 const SLABEL = {quota:'Eier pro Familie', hens:'Hennen', hens_history:'Hennenbestand', neighbor_note:'Hinweis für Nachbarn', last_backup:'letzte Sicherung', price_extern:'Preis extern', price_intern:'Preis intern', puffer_pct:'Winter-Puffer %', start_date:'Erfassung ab', live_start:'Live ab', paypal_me:'PayPal.me', battery_fence:'Batterie Stromzaun', battery_door:'Batterien Hühnerklappe'};
@@ -2303,7 +2455,7 @@ function describeChange(r){
   return ch.length ? ch.map(k => `${FLABEL[k]||k}: ${fv(k,o[k])} → ${fv(k,n[k])}`).join(' · ') : 'ohne sichtbare Änderung';
 }
 async function loadAudit(reset){
-  if(reset) audit = {rows:[], done:false, open:true};
+  if(reset) audit = {rows:[], done:false, open:true, last:audit.last};
   try{
     const from = audit.rows.length;
     const rows = await ok(await sb.from('audit_log').select('*').eq('project_id', S.cur).order('changed_at', {ascending:false}).range(from, from+24));
@@ -2313,17 +2465,19 @@ async function loadAudit(reset){
   render();
 }
 function auditCard(){
+  loadAuditLast();
+  const l = audit.rows[0] || audit.last;
+  const short = l ? `Letzte Änderung: ${new Date(l.changed_at).toLocaleString('de-DE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})} · ${esc(l.family_name||'unbekannt')}` : audit.last === null ? 'Noch keine Änderungen' : '';
   return `
-  <div class="card list">
-    <div class="row"><h2 style="margin:0"><span class="hi" aria-hidden="true">📝</span>Änderungsprotokoll</h2>
-      ${audit.open ? '<div style="display:flex;align-items:center;gap:6px"><button class="ghost" onclick="loadAudit(true)" aria-label="Neu laden">↻</button><button class="alt small" onclick="closeAudit()">Einklappen</button></div>' : '<button class="alt small" onclick="loadAudit(true)">Anzeigen</button>'}</div>
-    <p class="muted" style="margin:6px 0 0">Hier steht, wer wann etwas geändert oder gelöscht hat. Das laufende Zählen der heutigen Eier wird nicht erfasst.</p>
+  <details class="card list" ${audit.open?'open':''} ontoggle="auditToggle(this.open)">
+    ${foldHead('📝', 'Änderungsprotokoll', short)}
+    <div class="row" style="margin-top:6px"><p class="muted" style="margin:0">Hier steht, wer wann etwas geändert oder gelöscht hat. Das laufende Zählen der heutigen Eier wird nicht erfasst.</p><button class="ghost" onclick="loadAudit(true)" aria-label="Neu laden">↻</button></div>
     ${audit.open ? `<div style="height:6px"></div>${audit.rows.length ? audit.rows.map(r => `<div class="item" style="align-items:flex-start"><div>
       <strong>${esc(TLABEL[r.table_name]||r.table_name)}</strong> <span class="pill">${r.action==='DELETE'?'gelöscht':'geändert'}</span>
       <div style="font-size:14px">${esc(describeChange(r))}</div>
       <div class="muted">${new Date(r.changed_at).toLocaleString('de-DE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})} · ${esc(r.family_name||'unbekannt')}</div></div></div>`).join('') : '<div class="empty">Noch keine Änderungen protokolliert.</div>'}
     <div style="display:flex;gap:8px;margin-top:8px">${(!audit.done && audit.rows.length) ? '<button class="alt small" onclick="loadAudit(false)">Mehr laden</button>' : ''}<button class="alt small" onclick="closeAudit()">Einklappen</button></div>` : ''}
-  </div>`;
+  </details>`;
 }
 /* ================= Anleitung (im Tab Hof, je Projekt angepasst) ================= */
 const manOpen = {};
@@ -2343,7 +2497,7 @@ function manualCard(){
   const adminSec = !S.admin ? '' : manDet('admin', 'Tab Admin (nur für den Admin)', `<ul>
     <li><b>Offen auf einen Blick:</b> für Hühner und Ziegen die PayPal-Eingänge zum Prüfen, Bargeld bei Familien, offene Bestellungen, letzter Kassenabgleich, letzte Sicherung und bis wann der Dienstplan eingetragen ist. Rot heißt überfällig. Mit <b>↻</b> lädst du neu.</li>
     <li><b>Familien im Blick:</b> je Familie, wann sie zuletzt in der App war, wann sie sich zuletzt mit dem Code angemeldet hat, wann sie zuletzt etwas eingetragen hat und auf wie vielen Handys Benachrichtigungen und Erinnerungen eingeschaltet sind.</li>
-    <li><b>Wer bekommt was?:</b> Tippe auf eine Familie und nimm den Haken bei einer Art von Benachrichtigung weg (neue Bestellung, Bestellung kann raus, Dienst und Wochenrückblick, Bargeld einzahlen, Zahlung prüfen, Monatsabschluss). Das gilt sofort für alle Handys der Familie. Hinweise und Nachrichten, die du selbst verschickst, kommen immer an.</li>
+    <li><b>Wer bekommt was?:</b> Tippe auf eine Familie und nimm den Haken bei einer Art von Benachrichtigung weg (neue Bestellung, offene Bestellung für die Familie mit Dienst, Dienst und Wochenrückblick, Bargeld einzahlen, Zahlung prüfen, Monatsabschluss). Das gilt sofort für alle Handys der Familie. Hinweise und Nachrichten, die du selbst verschickst, kommen immer an.</li>
     <li><b>Hinweis an alle:</b> Text eingeben, optional ein Datum bei <b>Anzeigen bis</b>, dann <b>Veröffentlichen</b>. Er erscheint bei allen Familien des Projekts oben in der App und, wenn angehakt, als Benachrichtigung. <b>Entfernen</b> nimmt ihn zurück.</li>
     <li><b>Nachricht an eine Familie:</b> Familie wählen, Text eingeben, <b>Nachricht senden</b>. So prüfst du, ob Benachrichtigungen auf ihrem Handy ankommen.</li>
     <li><b>Erinnerungen:</b> ob der Zeitplan läuft und was die letzten Läufe um 18 Uhr verschickt haben. Mit <b>Vorschau anzeigen</b> siehst du für einen Tag, welche Erinnerungen rausgehen würden, mit <b>An mich senden</b> kommen sie nur auf dein Handy. Die Familien bekommen dabei nichts.</li>
@@ -2352,9 +2506,9 @@ function manualCard(){
     <li><b>Batteriewechsel:</b> Datum, wann du die Batterie vom Stromzaun${hens?' und die Batterien der automatischen Hühnerklappe':''} gewechselt hast. <b>Heute</b> setzt das heutige Datum, darunter steht, wie lange das her ist.</li>
     <li>Darunter stehen die <b>Einstellungen</b>, die <b>Familien</b> und <b>Daten</b> mit <b>Sichern</b>.</li></ul>`);
   const fehler = manDet('fehler', 'Fehler korrigieren und Protokoll', `<ul>
-    <li><b>Vertippt?</b> Tippe im Kalender (Tab <b>Dienst</b>) auf den Tag. Dort kannst du Einträge ändern oder mit ✕ löschen.${hens?' Das geht auch im eingeklappten <b>Verlauf</b> im Tab <b>Eier</b>.':''} Buchungen löschst du in der Kasse mit ✕. Die Kasse zeigt die letzten 15 Buchungen, mit <b>Ältere Buchungen anzeigen</b> siehst du weitere.</li>
+    <li><b>Vertippt?</b> Tippe im Kalender (Tab <b>Dienst</b>) auf den Tag. Dort kannst du Einträge ändern oder mit ✕ löschen.${hens?' Das geht auch im eingeklappten <b>Verlauf</b> im Tab <b>Eier</b>.':''} Buchungen löschst du in der Kasse mit ✕. Die Karte <b>Buchungen</b> ist eingeklappt und zeigt, wie viele es gibt und welche zuletzt kam. Ein Tipp öffnet die letzten 15 Buchungen, mit <b>Ältere Buchungen anzeigen</b> siehst du weitere.</li>
     <li>Einträge der letzten <b>14 Tage</b> kann jede Familie ändern, ältere nur ein Admin.</li>
-    <li>Im Tab <b>Hof</b> zeigt das <b>Änderungsprotokoll</b>, wer wann etwas geändert oder gelöscht hat. Im <b>Verlauf</b> der Eier und in der Tagesansicht steht bei jedem Eintrag, wer ihn gemacht hat und wann.</li></ul>`);
+    <li>Im Tab <b>Hof</b> zeigt das <b>Änderungsprotokoll</b> (eingeklappt, ein Tipp öffnet es), wer wann etwas geändert oder gelöscht hat. Im <b>Verlauf</b> der Eier und in der Tagesansicht steht bei jedem Eintrag, wer ihn gemacht hat und wann.</li></ul>`);
   const kasse = manDet('kasse', 'Kasse und Abrechnung', `<ul>
     <li>Oben stehen Einnahmen, Ausgaben und der <b>Bestand Gemeinschaftskasse</b>.${hens?' Dazu die Netto-Kosten pro Ei.':''}</li>
     <li><b>Buchung hinzufügen:</b> Bei einer <b>Ausgabe</b> (z. B. ${hens?'Futter, Streu':'Heu, Mineralfutter'}) wählst du, wer bezahlt hat, eine Familie oder die Gemeinschaftskasse. Eine <b>Einnahme</b> geht immer in die Kasse. Das Datum kannst du nachtragen.</li>
@@ -2371,7 +2525,8 @@ function manualCard(){
     <li>Der <b>Dienstplan der nächsten Wochen</b> ist eingeklappt. Dort tauschst du einzelne Wochen, mit <b>Weitere 8 Wochen</b> schaust du weiter voraus, und Admins können mit <b>Plan füllen</b> viele Wochen reihum eintragen.</li></ul>`);
   const protokoll = manDet('hof', 'Tab Hof und Einstellungen', `<ul>
     ${hens?`<li><b>Stall</b> (Tab Admin, Einstellungen): Hennenbestand (mit Datum, wenn sich die Zahl ändert), Eier pro Familie und Woche (jetzt ${q}), interner Preis (leer = Selbstkostenpreis) und externer Preis für Nachbarn.</li>
-    <li><b>Nachbar-Seite:</b> Hier erzeugst du mit <b>Link für Nachbarn teilen</b> eine WhatsApp-Nachricht mit dem Link zu einer öffentlichen Seite. Dort sehen Nachbarn ohne Anmeldung den Preis und können Eier bestellen. Wie viele Eier gerade da sind und wer Dienst hat, zeigt die Seite nicht, ihr liefert die Eier immer aus. Der Link muss nur einmal verschickt werden. Darüber trägst du einen Hinweis ein, z. B. Lieferzeiten. Er erscheint auf der Seite.</li>`:''}
+    <li><b>Nachbar-Seite:</b> Hier erzeugst du mit <b>Link für Nachbarn teilen</b> eine WhatsApp-Nachricht mit dem Link zu einer öffentlichen Seite. Dort sehen Nachbarn ohne Anmeldung den Preis und können Eier bestellen. Wie viele Eier gerade da sind und wer Dienst hat, zeigt die Seite nicht, ihr liefert die Eier immer aus. Der Link muss nur einmal verschickt werden.</li>`:''}
+    <li><b>Nachricht an Familien senden:</b> Antippen klappt die Karte auf. Wähle <b>Alle</b>, <b>Diensthabende</b> oder einzelne Familien, schreib die Nachricht (höchstens 200 Zeichen) und tippe auf <b>Senden an</b> (dort steht, an wen). Sie kommt als Benachrichtigung mit deinem Familiennamen, aber nur bei Familien, die Benachrichtigungen eingeschaltet haben. Höchstens eine Nachricht pro Minute und zehn am Tag.</li>
     <li><b>Darstellung:</b> <b>Automatisch</b> folgt dem Handy (hell oder dunkel), mit <b>Hell</b> oder <b>Dunkel</b> legst du es für dieses Handy fest.</li>
     <li>Nur für den Admin sichtbar: der Tab <b>Admin</b> mit den eingeklappten <b>Einstellungen</b> (${hens?'Stall, ':''}Zahlung, Erfassung), <b>Familien</b> und <b>Daten</b>. In der Kasse sind auch <b>Kassenabgleich</b> und <b>Monatsbericht teilen</b> nur für den Admin.</li>
     <li><b>Zahlung:</b> PayPal.me-Name für den QR-Code.</li>
@@ -2386,9 +2541,12 @@ function manualCard(){
         <li>Tippe aufs <b>große Ei</b>: Jedes Tippen zählt ein Ei mehr für heute und wird mit deinem Namen und der Uhrzeit im Verlauf festgehalten. Mit <b>−1 korrigieren</b> nimmst du das zuletzt gezählte Ei zurück.</li>
         <li><b>Jede Familie</b> darf zählen, auch ohne Dienst. Zählt oder verkauft eine Familie, die diese Woche keinen Dienst hat, zeigt die App einmal pro Tag ein kleines Fenster „Familie X hat Dienst“ und fragt, ob du trotzdem zählen möchtest. Es bleibt erlaubt, ihr merkt es nur.</li>
         <li>Rechts unter dem Ei steht, wie viele Eier <b>diese Woche</b> gelegt wurden. Links oben siehst du, wer <b>diese Woche Dienst</b> hat. Ein gelber Rahmen heißt: deine Familie.</li>
-        <li>Vergessen? Tippe unter „Vorrat &amp; Verkauf“ auf <b>Eier nachtragen</b> und wähle Datum und Anzahl.</li></ul>`),
+        <li>Vergessen? Tippe unter „Vorrat &amp; Verkauf“ auf <b>Eier nachtragen</b> und wähle Datum und Anzahl.</li>
+        <li>Der <b>Verlauf</b> (unten im Tab Eier, aufklappen) fasst jeden Tag in einer Zeile zusammen. Tippe auf den Tag, um die einzelnen Einträge zu sehen und mit ✕ zu löschen. Oben wählst du den Zeitraum (<b>7 Tage</b>, <b>30 Tage</b>, <b>Alles</b>) und die Art (<b>Gelegt</b>, <b>Genommen</b>, <b>Verkäufe</b>, <b>Korrekturen</b>). Mit <b>Ältere Tage laden</b> schaust du weiter zurück.</li></ul>`),
       manDet('vorrat', 'Vorrat, Verkauf und Zusatz-Eier', `<ul>
         <li><b>Vorrat</b> sind die gelegten Eier abzüglich der genommenen und verkauften (gezählt ab Live-Start).</li>
+        <li>Stimmt der <b>Übertrag aus Vorwochen</b> nicht (etwa weil Eier nicht an die nächste Dienst-Familie weitergegeben wurden)? Klappe „Wie kommen die … zustande?“ auf und tippe auf den Stift ✎ neben dem Übertrag. Gib den richtigen Wert und einen <b>Grund</b> ein. Jede Familie darf das. Die Änderung steht mit Name, Uhrzeit, altem und neuem Wert im Verlauf unter <b>Korrekturen</b>.</li>
+        <li><b>Entnehmen</b> erst eintragen, wenn die Eier wirklich übergeben sind, und das Häkchen <b>Die Eier wurden schon ausgeteilt</b> setzen. Eingetragene Eier fehlen sofort im Vorrat und können Bestellungen von Nachbarn blockieren.</li>
         <li><b>zum Verkauf</b> ist der ganze Vorrat: Es wird nichts mehr für die Familien zurückgelegt, wer zuerst kommt, bekommt die Eier. Nicht Verkauftes bleibt als <b>Übertrag</b> im Vorrat. Die älteren Eier verkauft ihr zuerst.</li>
         <li>Die <b>Prognose bis Sonntag</b> unter dem Vorrat ist nur eine Schätzung aus den letzten 14 Tagen. Sie zeigt, ob die Eier voraussichtlich für die freien Eier der Familien und die bestellten Eier reichen. Sie sperrt nichts.</li>
         <li><b>Bezahlte Eier einer Familie</b> (über die freien Eier hinaus) trägst du mit <b>Entnehmen</b> ein, die App öffnet dann die Bezahlung. Eine Familie zahlt dabei den internen Preis. Der Betrag geht in die Gemeinschaftskasse. Wähle, ob <b>Bar</b> oder per <b>PayPal</b> bezahlt wird. Danach erscheint die Bezahlung: Mit <b>PayPal öffnen</b> zahlt die Familie den Betrag ein, mit <b>Später</b> schließt ihr das Fenster. Der Eingang wird in der Kasse kontrolliert (siehe „Zahlungen kontrollieren“).</li>
@@ -2397,9 +2555,10 @@ function manualCard(){
       manDet('bestell', 'Bestellungen von Nachbarn', `<ul>
         <li>Auf der Nachbar-Seite (Link aus dem Tab <b>Hof</b>) können Nachbarn <b>Eier bestellen</b>. Sie tragen ihre Familie und die Stückzahl ein (bis 30). Ist gerade nicht genug frei, kommen sie auf die <b>Warteliste</b>.</li>
         <li>Neue Bestellungen erscheinen im Tab <b>Eier</b> in der Karte <b>Bestellungen von Nachbarn</b>. Am Reiter <b>Eier</b> zeigt ein roter Punkt mit Zahl, wie viele offen sind. Zieh zum Aktualisieren nach unten, wenn du sie gleich sehen willst.</li>
+        <li>Benachrichtigungen: Die Familie mit <b>Dienst</b> bekommt bei jeder neuen Bestellung eine Nachricht und danach alle 2 Stunden eine Erinnerung, solange die Bestellung offen ist (nur von 8 bis 20 Uhr, nicht für wartende Bestellungen). Die anderen Familien bekommen nur einmal die Meldung, dass eine neue Bestellung da ist.</li>
         <li>Bestellte Eier gelten als reserviert. Die Nachbar-Seite zeigt keine Eieranzahl und keine Abholung mehr, weil ihr die Eier immer ausliefert.</li>
-        <li><b>Warteliste:</b> Bestellungen werden der Reihe nach bedient. Passt eine in den Vorrat, steht <b>bereit</b> daneben, sonst „wartet · Platz n“. Kommt eine Bestellung auf die Warteliste, bekommen alle Familien eine Nachricht. Wird sie später bereit, bekommt die Familie mit Dienst Bescheid. Nach 7 Tagen verfällt eine wartende Bestellung, der Nachbar sieht das auf seiner Seite.</li>
-        <li><b>Verkauft:</b> Tippe darauf, wenn du die Eier ausgibst. Name und Anzahl sind schon eingetragen, der Preis ist der externe. Nach dem Speichern ist die Bestellung erledigt und das Geld in der Kasse.</li>
+        <li><b>Warteliste:</b> Bestellungen werden der Reihe nach bedient. Passt eine in den Vorrat, steht <b>bereit</b> daneben, sonst „wartet · Platz n“. Wird eine wartende Bestellung später bereit, bekommt die Familie mit Dienst Bescheid. Nach 7 Tagen verfällt eine wartende Bestellung, der Nachbar sieht das auf seiner Seite.</li>
+        <li><b>Verkaufen:</b> Tippe darauf, wenn du die Eier ausgibst. Name und Anzahl sind schon eingetragen, der Preis ist der externe. Nach dem Speichern ist die Bestellung erledigt und das Geld in der Kasse.</li>
         <li><b>✕</b> lehnt eine Bestellung ab. Die Eier sind dann wieder frei. Erledigte und abgelehnte Bestellungen stehen unter „Erledigt“. Dort löschst du sie mit <b>✕</b>, zum Beispiel Testbestellungen.</li></ul>`),
       manDet('zahlkontrolle', 'Zahlungen kontrollieren, Trinkgeld und Kassenabgleich', `<ul>
         <li>Jeder Verkauf und jede Zusatz-Eier-Buchung zeigt in der <b>Kasse</b>, welche Familie verkauft bzw. genommen hat, und den Zahlungsstand darunter.</li>
@@ -2492,29 +2651,87 @@ function weekDutyPopup(){
   lsSet(key, '1');
   ask(`Diese Woche (KW ${isoWeek(m)}) ist deine Familie bei den ${isHens() ? 'Hühnern' : 'Ziegen'} mit dem Dienst dran.`, {title:'Du hast diese Woche Dienst', ok:'Alles klar', cancel:false});
 }
+// Eingeklappte Karte mit Titel und Kurzstatus (Tab Hof, Kasse)
+const foldHead = (icon, title, status) => `<summary><div><h2 style="margin:0"><span class="hi" aria-hidden="true">${icon}</span>${title}</h2>${status ? `<div class="muted" style="font-size:14px;margin-top:2px">${status}</div>` : ''}</div></summary>`;
+let hofOpen = {};
 function vHof(){
-  const p = P();
+  const p = P(), th = {auto:'Automatisch', light:'Hell', dark:'Dunkel'}[themeNow()];
   return `
+  ${isHens() ? `<div class="card">
+    <h2><span class="hi" aria-hidden="true">🏡</span>Nachbar-Seite</h2>
+    <button class="yolk" style="width:100%" onclick="sheetNeighbors()">Link für Nachbarn teilen (WhatsApp)</button>
+  </div>` : ''}
+  ${fmCard()}
+  ${isHens() ? pushCard() : ''}
+  <details class="card" ${hofOpen.theme?'open':''} ontoggle="hofOpen.theme=this.open">
+    ${foldHead('🌓', 'Darstellung', th)}
+    <div class="seg" style="margin-top:10px">${[['auto','Automatisch'],['light','Hell'],['dark','Dunkel']].map(([k,l]) => `<button class="${themeNow()===k?'on':''}" aria-pressed="${themeNow()===k}" onclick="setTheme('${k}')">${l}</button>`).join('')}</div>
+    <p class="muted" style="margin:8px 0 0">Automatisch folgt der Einstellung des Handys. Die Wahl gilt nur auf diesem Handy.</p>
+  </details>
+  ${auditCard()}
+  ${manualCard()}
   <div class="card">
     <h2><span class="hi" aria-hidden="true">👤</span>Angemeldet</h2>
     <div class="row"><span>${fam(S.me).system ? 'Konto' : 'Familie'} <strong>${esc(fam(S.me).name)}</strong>${S.admin?' <span class="pill">Admin</span>':''}</span><button class="alt small" onclick="logout()">Abmelden</button></div>
     <p class="muted" style="margin:10px 0 0">Bei „${esc(p.name)}“ dabei: ${members().map(f => esc(f.name)).join(', ')}. Familien und Zuordnung ändert der Admin.</p>
-  </div>
-  ${isHens() ? `<div class="card">
-    <h2><span class="hi" aria-hidden="true">🏡</span>Nachbar-Seite</h2>
-    <p class="muted" style="margin:0 0 8px">Öffentliche Seite ohne Anmeldung: ${esc(CONFIG.site)}/nachbarn</p>
-    <label class="muted" style="display:block">Hinweis für Nachbarn (z. B. Abholort oder Zeiten). Achtung: Der Text ist für alle sichtbar, die den Link kennen.</label>
-    <textarea rows="3" onchange="saveSetting({neighbor_note:this.value.trim()||null})">${esc(p.neighborNote)}</textarea>
-    <button class="yolk" style="width:100%;margin-top:12px" onclick="sheetNeighbors()">Link für Nachbarn teilen (WhatsApp)</button>
-  </div>` : ''}
-  ${isHens() ? pushCard() : ''}
-  <div class="card">
-    <h2><span class="hi" aria-hidden="true">🌓</span>Darstellung</h2>
-    <div class="seg">${[['auto','Automatisch'],['light','Hell'],['dark','Dunkel']].map(([k,l]) => `<button class="${themeNow()===k?'on':''}" aria-pressed="${themeNow()===k}" onclick="setTheme('${k}')">${l}</button>`).join('')}</div>
-    <p class="muted" style="margin:8px 0 0">Automatisch folgt der Einstellung des Handys. Die Wahl gilt nur auf diesem Handy.</p>
-  </div>
-  ${auditCard()}
-  ${manualCard()}`;
+  </div>`;
+}
+/* Nachricht an Familien (Tab Hof): kurze Push-Nachricht an alle oder ausgewählte Familien des Projekts.
+   Senden über notify-order {family_msg:true}; dort gelten 200 Zeichen, 1 Minute Abstand und 10 pro Tag je Familie. */
+const FM_MAX = 200;
+let fm = {open:false, to:'all', text:'', busy:false};    // to: 'all' oder Liste von Familien-IDs
+const fmOthers = () => members().filter(f => f.id !== S.me && !f.left);
+function fmDuty(){ const d = dutyFam(monday(new Date())); return fmOthers().some(f => f.id === d) ? d : null; }
+const fmIsDuty = () => { const d = fmDuty(); return !!d && Array.isArray(fm.to) && fm.to.length === 1 && fm.to[0] === d; };
+const fmLabel = () => fm.to === 'all' ? 'alle' : fmIsDuty() ? `${fam(fm.to[0]).name} (Dienst)` : fm.to.map(id => fam(id).name).join(', ');
+function fmCard(){
+  const others = fmOthers();
+  if(!others.length) return '';
+  if(Array.isArray(fm.to) && fm.to.some(id => !others.some(f => f.id === id))){   // nach Projektwechsel
+    fm.to = fm.to.filter(id => others.some(f => f.id === id)); if(!fm.to.length) fm.to = 'all';
+  }
+  const duty = fmDuty(), sel = id => Array.isArray(fm.to) && fm.to.includes(id);
+  const chip = (on, click, label) => `<button class="${on ? 'on' : ''}" aria-pressed="${on}" onclick="${click}">${label}</button>`;
+  const none = Array.isArray(fm.to) && !fm.to.length;
+  return `<details class="card" ${fm.open ? 'open' : ''} ontoggle="fm.open=this.open">
+    ${foldHead('📣', 'Nachricht an Familien senden', '')}
+    <div style="margin-top:10px">
+      <div class="muted" style="font-size:14px">An wen?</div>
+      <div class="fmchips">
+        ${chip(fm.to === 'all', 'fmTo(\'all\')', 'Alle')}
+        ${duty ? chip(fmIsDuty(), 'fmTo(\'duty\')', 'Diensthabende') : ''}
+        ${others.map(f => chip(sel(f.id) && !fmIsDuty(), `fmTo('${f.id}')`, esc(f.name))).join('')}
+      </div>
+      <textarea id="fmText" rows="3" maxlength="${FM_MAX}" aria-label="Nachricht" oninput="fm.text=this.value;fmCount()">${esc(fm.text)}</textarea>
+      <div class="muted" id="fmCount" style="font-size:14px;text-align:right">${fm.text.length} / ${FM_MAX}</div>
+      <button class="yolk" style="width:100%;margin-top:6px" onclick="fmSend()" ${fm.busy || none ? 'disabled' : ''}>${fm.busy ? 'Wird gesendet …' : none ? 'Bitte Empfänger wählen' : `Senden an ${esc(fmLabel())}`}</button>
+      <p class="muted" style="margin:8px 0 0;font-size:14px">Die Nachricht kommt als Benachrichtigung mit deinem Familiennamen. Familien, die Benachrichtigungen nicht eingeschaltet haben, bekommen sie nicht. Höchstens eine Nachricht pro Minute.</p>
+    </div>
+  </details>`;
+}
+function fmCount(){ const c = document.getElementById('fmCount'); if(c) c.textContent = `${fm.text.length} / ${FM_MAX}`; }
+function fmTo(k){
+  if(k === 'all') fm.to = 'all';
+  else if(k === 'duty') fm.to = fmIsDuty() ? 'all' : [fmDuty()];
+  else {
+    const cur = fm.to === 'all' || fmIsDuty() ? [] : fm.to;
+    fm.to = cur.includes(k) ? cur.filter(x => x !== k) : [...cur, k];
+    if(fm.to.length && fm.to.length === fmOthers().length) fm.to = 'all';
+  }
+  render();
+}
+async function fmSend(){
+  const text = fm.text.replace(/\s+/g, ' ').trim();
+  if(!text){ toast('Bitte einen Text eingeben'); return; }
+  if(Array.isArray(fm.to) && !fm.to.length){ toast('Bitte Empfänger wählen'); return; }
+  fm.busy = true; render();
+  try{
+    const r = await adminCall({family_msg:true, project_id:S.cur, to:fm.to, text});
+    const got = r.to.length - r.without.length;
+    toast(got > 0 ? `Gesendet an ${got} ${got === 1 ? 'Familie' : 'Familien'}${r.without.length ? `. Ohne Benachrichtigungen: ${r.without.join(', ')}` : ''}` : `Nicht zugestellt: ${r.without.join(', ')} ${r.without.length === 1 ? 'hat' : 'haben'} keine Benachrichtigungen eingeschaltet`);
+    if(got > 0) fm.text = '';
+  }catch(e){ toast(e.message === 'Datenbank-Update fehlt' ? 'Senden ist erst nach dem nächsten Datenbank-Update möglich' : (e.message || 'Fehler beim Senden')); }
+  fm.busy = false; render();
 }
 function backupInfo(){
   const d = P().lastBackup, days = d ? daysSince(d) : null;
@@ -2607,7 +2824,7 @@ function admOpenCard(){
     const ck = agoDays(p.last_check), bk = p.last_backup ? daysSince(p.last_backup) : null;
     const dutyEnd = p.duty_end ? parseD(p.duty_end) : null, dutyLeft = dutyEnd ? Math.round((dutyEnd - parseD(today())) / 864e5) : null;
     if(dutyEnd) dutyEnd.setDate(dutyEnd.getDate() + 6);
-    return `<h2 style="font-size:17px;margin:14px 0 4px">${p.kind === 'goats' ? '🐐' : '🐔'} ${esc(p.name)}</h2>
+    return `<div style="height:8px"></div>
       ${row('PayPal-Eingänge prüfen', pr.n ? `${pr.n} · ${eur(Number(pr.sum))}${pr.oldest ? ` · seit ${fmtDay(parseD(pr.oldest))}` : ''}` : 'keine', pr.n && pr.oldest && daysSince(pr.oldest) >= OVERDUE.pruefen)}
       ${row('Bargeld bei Familien', bar.length ? bar.map(b => `${esc(b.name)} ${eur(Number(b.sum))}`).join('<br>') : 'keins', bar.some(b => b.oldest && daysSince(b.oldest) >= OVERDUE.bar_offen))}
       ${p.kind === 'hens' ? row('Offene Bestellungen', p.orders ? `${p.orders}${p.orders_oldest ? ` · älteste ${agoText(p.orders_oldest)}` : ''}` : 'keine', p.orders && agoDays(p.orders_oldest) >= 3) : ''}
@@ -2617,7 +2834,7 @@ function admOpenCard(){
   };
   return `<div class="card list">
     <div class="row"><h2 style="margin:0"><span class="hi" aria-hidden="true">📋</span>Offen auf einen Blick</h2><button class="ghost" onclick="adm.data=null;render()" aria-label="Neu laden">↻</button></div>
-    ${adm.data.projects.map(block).join('')}
+    ${(adm.data.projects.filter(x => x.kind === P().kind).length ? adm.data.projects.filter(x => x.kind === P().kind) : adm.data.projects).map(block).join('')}
     ${info('Rot heißt: überfällig. PayPal-Eingänge ab 3 Tagen, Bargeld ab 7 Tagen, Bestellungen ab 3 Tagen, Kassenabgleich und Sicherung nach einem Monat, Dienstplan, wenn er in weniger als 8 Wochen endet.')}
   </div>`;
 }
@@ -2646,13 +2863,14 @@ function admFamCard(){
 
 /* Wer bekommt was? Schalter je Familie und Art der Benachrichtigung (Tabelle push_prefs, gelesen von notify-order) */
 const PUSH_KINDS = [
-  ['order_new', 'Neue Bestellung', 'sobald ein Nachbar bestellt'],
-  ['order_ready', 'Bestellung kann raus', 'an die Familie mit Dienst'],
+  ['order_new', 'Neue Bestellung', 'einmal, an die Familien ohne Dienst'],
+  ['order_ready', 'Offene Bestellung (Dienst)', 'an die Familie mit Dienst, alle 2 Std. von 8 bis 20 Uhr'],
   ['duty', 'Dienst und Wochenrückblick', 'sonntags um 18 Uhr'],
   ['cash', 'Bargeld einzahlen', 'ab 7 Tagen offen'],
   ['pay_check', 'Zahlung prüfen', 'geht nur an Admins'],
   ['month', 'Monatsabschluss', 'am 1., geht nur an Admins'],
-  ['door', 'Neue Türzeiten', 'wenn jemand die Automatiktür umstellt']
+  ['door', 'Neue Türzeiten', 'wenn jemand die Automatiktür umstellt'],
+  ['family_msg', 'Nachrichten von Familien', 'aus dem Tab Hof, „Nachricht an Familien senden“']
 ];
 const ADMIN_KINDS = ['pay_check','month'];
 const kindsOf = f => PUSH_KINDS.filter(k => f.admin || !ADMIN_KINDS.includes(k[0]));
