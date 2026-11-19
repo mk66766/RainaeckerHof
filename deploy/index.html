@@ -772,13 +772,14 @@ function weekNav(k){ weekOff = Math.min(0, weekOff + k); render(); }
 function weekCard(){
   const p = P(), q = quota(), m = monday(new Date()), w = weekStats(m);
   const sp = surplusParts(m), avail = sp.surplus;
-  const short = Math.max(0, w.total - w.laid), oq = orderQueue(), openQty = sum(openOrders().filter(o => oq.q[o.id].ready), o => o.qty), waitN = openOrders().length - openOrders().filter(o => oq.q[o.id].ready).length;
+  const short = Math.max(0, w.total - w.laid), oq = orderQueue(), readyO = openOrders().filter(o => oq.q[o.id].ready), openQty = sum(readyO, o => o.qty), waitN = openOrders().length - readyO.length;
   return `
   <div class="card">
     <h2><span class="hi" aria-hidden="true">🥚</span>Vorrat &amp; Verkauf</h2>
     <div class="stock"><span class="big">${stock()}</span><span>Eier im Vorrat</span></div>
+    ${openQty>0 ? `<p style="margin:4px 0 0">davon <b>${openQty} für ${readyO.length===1 ? esc(readyO[0].buyer) : 'Bestellungen'} reserviert</b></p>` : ''}
+    ${stockCalc(m)}
     ${(() => { const f = weekForecast(); return f.restDays > 0 ? `<p class="muted" style="margin:6px 0 0">Bis Sonntag noch etwa ${f.more} Eier zu erwarten - ${f.left >= 0 ? 'reicht für alle' : `es fehlen etwa <b>${-f.left}</b>`}</p>` : ''; })()}
-    ${openQty>0 ? `<p class="muted" style="margin:4px 0 0">Von Nachbarn bestellt: ${openQty}</p>` : ''}
     ${waitN>0 ? `<p class="muted" style="margin:4px 0 0">Auf der Warteliste: ${waitN}</p>` : ''}
     <div style="margin-top:12px">
       <div class="row"><span>Preis intern (Familien)</span><strong>${eur(internPrice())}${typeof p.priceIntern==='number'?'':' · Selbstkosten'}</strong></div>
@@ -801,6 +802,16 @@ function weekCard(){
         <button class="${f.id===S.me?'yolk':'alt'} small" onclick="sheetTake('${f.id}',${left||1})">Entnehmen</button>
         </div>`; }).join('')}</div>
   </div>`}`;
+}
+// Einklappbare Rechnung unter dem Vorrat: Übertrag + gelegt − genommen − verkauft = Vorrat (wie stock(), nur ab Live-Start)
+function stockCalc(m){
+  const s = ds(m), lg = P().log.filter(l => isLive(l.date)), wk = lg.filter(l => l.date >= s);
+  const carry = sum(lg.filter(l => l.date < s), l => l.type==='laid' ? l.n : l.type==='verzicht' ? 0 : -l.n);
+  const n = t => sum(wk.filter(l => l.type === t), l => l.n), L = n('laid'), T = n('take'), Z = n('zusatz'), V = n('sale');
+  const r = (label, v) => `<div class="row" style="margin-top:4px"><span>${label}</span><strong>${v}</strong></div>`;
+  return `<details class="info"><summary>ⓘ Wie kommen die ${stock()} zustande?</summary>
+    ${r('Übertrag aus Vorwochen', carry)}${r('+ diese Woche gelegt', L)}${r('− von Familien genommen', T)}${Z ? r('− Zusatz-Eier (bezahlt)', Z) : ''}${r('− an Nachbarn verkauft', V)}
+    <div class="row" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--line)"><span>= im Vorrat</span><strong>${carry + L - T - Z - V}</strong></div></details>`;
 }
 // Kopf der Wochenkarte mit Blättern (◀ frühere Woche, ▶ zurück Richtung heute)
 function weekHead(m, title){
