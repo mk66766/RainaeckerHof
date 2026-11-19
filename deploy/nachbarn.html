@@ -197,8 +197,7 @@ function show(d){
   $('orderbox').hidden = false;
   $('orderHint').textContent = 'Wir liefern die Eier zu dir. Sind gerade nicht genug da, kommst du auf die Warteliste und siehst den Stand hier unter „Deine Bestellungen“. Nach 7 Tagen verfällt die Bestellung.';
   last = {n};
-  const note = (d.note || '').trim();
-  $('notebox').hidden = !note; $('note').textContent = note;
+  $('notebox').hidden = true;   // Hinweis für Nachbarn wird nicht mehr angezeigt (Seite ist fest: Lieferung)
   const t = d.updated ? new Date(d.updated) : new Date();
   $('stand').textContent = 'Stand: ' + t.toLocaleDateString('de-DE', {day:'numeric', month:'long'}) + ', ' + t.toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'}) + ' Uhr';
 }
