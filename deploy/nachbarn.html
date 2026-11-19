@@ -82,6 +82,9 @@ input{font:inherit;color:var(--ink);background:var(--bg);border:1.5px solid var(
 input:focus-visible{outline:3px solid var(--yolk);outline-offset:2px}
 button.yolk{background:var(--yolk);color:var(--yolk-ink);margin-top:14px}
 button:disabled{opacity:.5;cursor:default}
+.when{display:flex;gap:8px}
+.when input{flex:1;min-width:0}
+.when input[type=time]{flex:0 0 38%}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 .msg{margin:10px 0 0;font-weight:600}
 .msg.ok{color:var(--good)}
@@ -133,6 +136,8 @@ button:disabled{opacity:.5;cursor:default}
       <input id="who" type="text" maxlength="80" autocomplete="name" required>
       <label for="qty">Anzahl Eier</label>
       <div class="step"><button type="button" onclick="stepQty(-1)" aria-label="weniger">−</button><input id="qty" type="number" inputmode="numeric" min="1" max="30" required><button type="button" onclick="stepQty(1)" aria-label="mehr">+</button></div>
+      <label for="needDate">Spätestens benötigt bis</label>
+      <div class="when"><input id="needDate" type="date" aria-label="Datum"><input id="needTime" type="time" aria-label="Uhrzeit"></div>
       <div class="hp" aria-hidden="true"><label for="hp">Bitte leer lassen</label><input id="hp" type="text" tabindex="-1" autocomplete="off"></div>
       <button class="yolk" id="send" type="submit">Bestellen</button>
       <div class="dup" id="dup" hidden role="alertdialog" aria-labelledby="dupText">
@@ -169,6 +174,17 @@ const myOrders = { get(){ try{ return JSON.parse(localStorage.getItem(ORD_KEY) |
 const store = { get(){ try{ return localStorage.getItem(NAME_KEY) || ''; }catch(e){ return ''; } }, set(v){ try{ localStorage.setItem(NAME_KEY, v); }catch(e){} } };
 const DUP_MIN = 30;   // gleiche Bestellung innerhalb von 30 Minuten: erst nachfragen
 let busy = false, dupOk = false, lastId = null;
+// Frist aus Datum + Uhrzeit (Ortszeit des Handys); ohne Datum keine Frist, ohne Uhrzeit 18:00 Uhr
+function needBy(){
+  const d = $('needDate').value; if(!d) return null;
+  const t = new Date(d + 'T' + ($('needTime').value || '18:00'));
+  return isNaN(t) ? undefined : t;
+}
+function initNeed(){
+  const iso = x => x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0');
+  const now = new Date(); $('needDate').min = iso(now); $('needDate').max = iso(new Date(now.getTime() + 60 * 864e5));
+  $('needDate').addEventListener('change', () => { if($('needDate').value && !$('needTime').value) $('needTime').value = '18:00'; });
+}
 function stepQty(d){ const q = $('qty'); q.value = Math.min(Number(q.max) || 100, Math.max(1, (parseInt(q.value) || 0) + d)); }
 const eur = n => Number(n).toLocaleString('de-DE', {style:'currency', currency:'EUR'});
 
@@ -232,7 +248,7 @@ function showForm(){
   $('qty').value = ''; $('orderMsg').textContent = ''; $('dup').hidden = true;
   $('qty').focus();
 }
-function showDone(who, qty, res){
+function showDone(who, qty, res, need){
   $('orderform').hidden = true; $('orderHint').hidden = true; $('dup').hidden = true;
   $('doneTitle').textContent = 'Danke, ' + who + '! Deine Bestellung ist angekommen.';
   $('doneWhat').textContent = eggs(qty) + ' bestellt';
@@ -244,6 +260,7 @@ function showDone(who, qty, res){
     b.textContent = 'Eier sind für dich da'; b.className = 'badge ready';
     $('doneText').textContent = 'Die Eier sind für dich zurückgelegt. Wir liefern sie dir.';
   }
+  if(need) $('doneText').textContent += ' Benötigt bis ' + need.toLocaleDateString('de-DE', {weekday:'short', day:'numeric', month:'short'}) + ', ' + need.toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'}) + ' Uhr.';
   $('done').hidden = false; $('orderbox').classList.add('orderbox-hi');
   $('orderbox').scrollIntoView({behavior:'smooth', block:'start'});
   try{ $('done').focus({preventScroll:true}); }catch(e){}
@@ -256,6 +273,9 @@ async function order(ev){
   const say = (t, ok) => { msg.textContent = t; msg.className = 'msg ' + (ok ? 'ok' : 'bad'); };
   if(who.length < 2){ say('Bitte gib deine Familie an.', false); $('who').focus(); return; }
   if(!(qty >= 1)){ say('Bitte gib an, wie viele Eier du möchtest.', false); $('qty').focus(); return; }
+  const need = needBy();
+  if(need === undefined){ say('Bitte prüfe Datum und Uhrzeit.', false); $('needDate').focus(); return; }
+  if(need && need.getTime() < Date.now()){ say('Datum und Uhrzeit liegen in der Vergangenheit.', false); $('needDate').focus(); return; }
   const same = !dupOk && recentSame(who, qty);
   if(same){
     const min = Math.max(1, Math.round((Date.now() - same.t) / 6e4));
@@ -266,14 +286,16 @@ async function order(ev){
   dupOk = false; $('dup').hidden = true;
   busy = true; $('send').disabled = true; $('send').textContent = 'Wird gesendet …'; say('', true);
   try{
+    const body = {p_buyer: who, p_qty: qty, p_hp: $('hp').value};
+    if(need) body.p_need_by = need.toISOString();   // nur mitschicken, wenn angegeben
     const r = await fetch(API.replace('neighbor_info', 'place_egg_order'), {method:'POST', headers:{apikey:KEY, Authorization:'Bearer ' + KEY, 'Content-Type':'application/json'},
-      body: JSON.stringify({p_buyer: who, p_qty: qty, p_hp: $('hp').value}), cache:'no-store'});
+      body: JSON.stringify(body), cache:'no-store'});
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const res = await r.json();
     if(res && res.ok){
-      store.set(who);
+      store.set(who); $('needDate').value = ''; $('needTime').value = '';
       if(res.id){ lastId = res.id; myOrders.set([...myOrders.get(), {id: res.id, t: Date.now(), who, qty}]); }
-      showDone(who, qty, res);
+      showDone(who, qty, res, need);
       load();
     } else {
       say((res && res.message) || 'Das hat leider nicht geklappt. Bitte versuche es noch einmal.', false);
@@ -287,6 +309,7 @@ $('dupYes').addEventListener('click', () => { dupOk = true; $('dup').hidden = tr
 $('again').addEventListener('click', showForm);
 $('orderform').addEventListener('submit', order);
 $('who').value = store.get();
+initNeed();
 $('reload').addEventListener('click', load);
 document.addEventListener('visibilitychange', () => { if(!document.hidden) load(); });
 setInterval(() => { if(!document.hidden) load(); }, 60000);

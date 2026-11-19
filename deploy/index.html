@@ -412,7 +412,7 @@ async function loadProject(){
     supplies: su.data.map(s => ({id:s.id,name:s.name,days:s.days,set:s.set_on})),
     events: ev.data.map(e => ({id:e.id,date:e.date,end:e.end_date||'',title:e.title,kind:e.kind,fam:e.family_id||'',note:e.note,by:e.created_by})),
     cashChecks: cc.data.map(c => ({id:c.id, at:c.created_at, by:c.created_by, balance:Number(c.paypal_balance), expected:Number(c.expected), openCash:Number(c.open_cash), note:c.note})),
-    orders: od.data.map(o => ({id:o.id, created:o.created_at, buyer:o.buyer, qty:o.qty, status:o.status}))
+    orders: od.data.map(o => ({id:o.id, created:o.created_at, buyer:o.buyer, qty:o.qty, status:o.status, needBy:o.need_by||null}))
   };
   const paths = S.p.animals.filter(a => a.photoPath).map(a => a.photoPath);
   if(paths.length){
@@ -684,14 +684,16 @@ function ordersCard(){
   const done = all.filter(o => !orderLive(o)).slice(-8).reverse();
   if(!all.length) return '';
   const eggs = n => `${n} Ei${n===1?'':'er'}`;
+  // Frist vom Nachbarn („Spätestens benötigt bis“), nur wenn angegeben
+  const need = o => o.needBy ? `<div style="margin-top:4px;padding:3px 10px;border-radius:8px;display:inline-block;background:color-mix(in srgb, var(--yolk) 28%, transparent);color:var(--ink);font-weight:600">⏰ Benötigt bis: ${whenText(o.needBy)}</div>` : '';
   const DONE = {erledigt:'verkauft', abgelehnt:'abgelehnt', verfallen:'verfallen', offen:'verfallen'};
   return `
   <div class="card list" ${open.length?'style="border:2px solid var(--yolk)"':''}>
     <h2><span class="hi" aria-hidden="true">🛒</span>Bestellungen von Nachbarn</h2>
     ${open.length ? open.map(o => q[o.id].ready
-      ? `<div class="item"><div><strong>${esc(o.buyer)}</strong> <span class="pill">bereit</span><div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div></div>
-      <div style="display:flex;align-items:center;gap:6px"><button class="yolk small" onclick="sheetSale('${o.id}')">Verkauft</button><button class="ghost" onclick="orderReject('${o.id}')" aria-label="Bestellung ablehnen">✕</button></div></div>`
-      : `<div class="item" style="flex-direction:column;align-items:stretch;gap:8px"><div class="row"><div><strong>${esc(o.buyer)}</strong> <span class="muted">wartet · Platz ${q[o.id].pos}</span><div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div></div><button class="ghost" onclick="orderReject('${o.id}')" aria-label="Bestellung ablehnen">✕</button></div>
+      ? `<div class="item"><div><strong>${esc(o.buyer)}</strong> <span class="pill">bereit</span><div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div>${need(o)}</div>
+      <div style="display:flex;align-items:center;gap:6px"><button class="yolk small" onclick="sheetSale('${o.id}')">Verkaufen</button><button class="ghost" onclick="orderReject('${o.id}')" aria-label="Bestellung ablehnen">✕</button></div></div>`
+      : `<div class="item" style="flex-direction:column;align-items:stretch;gap:8px"><div class="row"><div><strong>${esc(o.buyer)}</strong> <span class="muted">wartet · Platz ${q[o.id].pos}</span><div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div>${need(o)}</div><button class="ghost" onclick="orderReject('${o.id}')" aria-label="Bestellung ablehnen">✕</button></div>
       </div>`).join('')
       : '<div class="empty">Keine offenen Bestellungen.</div>'}
     ${open.some(o => !q[o.id].ready) ? `<p class="muted" style="margin:8px 0 0">Wartende Bestellungen werden der Reihe nach bereit, sobald genug Eier im Vorrat sind. Nach ${ORDER_DAYS} Tagen verfällt eine Bestellung.</p>` : ''}
@@ -772,13 +774,14 @@ function weekNav(k){ weekOff = Math.min(0, weekOff + k); render(); }
 function weekCard(){
   const p = P(), q = quota(), m = monday(new Date()), w = weekStats(m);
   const sp = surplusParts(m), avail = sp.surplus;
-  const short = Math.max(0, w.total - w.laid), oq = orderQueue(), openQty = sum(openOrders().filter(o => oq.q[o.id].ready), o => o.qty), waitN = openOrders().length - openOrders().filter(o => oq.q[o.id].ready).length;
+  const short = Math.max(0, w.total - w.laid), oq = orderQueue(), readyO = openOrders().filter(o => oq.q[o.id].ready), openQty = sum(readyO, o => o.qty), waitN = openOrders().length - readyO.length;
   return `
   <div class="card">
     <h2><span class="hi" aria-hidden="true">🥚</span>Vorrat &amp; Verkauf</h2>
     <div class="stock"><span class="big">${stock()}</span><span>Eier im Vorrat</span></div>
+    ${openQty>0 ? `<p style="margin:4px 0 0">davon <b>${openQty} für ${readyO.length===1 ? esc(readyO[0].buyer) : 'Bestellungen'} reserviert</b></p>` : ''}
+    ${stockCalc(m)}
     ${(() => { const f = weekForecast(); return f.restDays > 0 ? `<p class="muted" style="margin:6px 0 0">Bis Sonntag noch etwa ${f.more} Eier zu erwarten - ${f.left >= 0 ? 'reicht für alle' : `es fehlen etwa <b>${-f.left}</b>`}</p>` : ''; })()}
-    ${openQty>0 ? `<p class="muted" style="margin:4px 0 0">Von Nachbarn bestellt: ${openQty}</p>` : ''}
     ${waitN>0 ? `<p class="muted" style="margin:4px 0 0">Auf der Warteliste: ${waitN}</p>` : ''}
     <div style="margin-top:12px">
       <div class="row"><span>Preis intern (Familien)</span><strong>${eur(internPrice())}${typeof p.priceIntern==='number'?'':' · Selbstkosten'}</strong></div>
@@ -801,6 +804,16 @@ function weekCard(){
         <button class="${f.id===S.me?'yolk':'alt'} small" onclick="sheetTake('${f.id}',${left||1})">Entnehmen</button>
         </div>`; }).join('')}</div>
   </div>`}`;
+}
+// Einklappbare Rechnung unter dem Vorrat: Übertrag + gelegt − genommen − verkauft = Vorrat (wie stock(), nur ab Live-Start)
+function stockCalc(m){
+  const s = ds(m), lg = P().log.filter(l => isLive(l.date)), wk = lg.filter(l => l.date >= s);
+  const carry = sum(lg.filter(l => l.date < s), l => l.type==='laid' ? l.n : l.type==='verzicht' ? 0 : -l.n);
+  const n = t => sum(wk.filter(l => l.type === t), l => l.n), L = n('laid'), T = n('take'), Z = n('zusatz'), V = n('sale');
+  const r = (label, v) => `<div class="row" style="margin-top:4px"><span>${label}</span><strong>${v}</strong></div>`;
+  return `<details class="info"><summary>ⓘ Wie kommen die ${stock()} zustande?</summary>
+    ${r('Übertrag aus Vorwochen', carry)}${r('+ diese Woche gelegt', L)}${r('− von Familien genommen', T)}${Z ? r('− Zusatz-Eier (bezahlt)', Z) : ''}${r('− an Nachbarn verkauft', V)}
+    <div class="row" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--line)"><span>= im Vorrat</span><strong>${carry + L - T - Z - V}</strong></div></details>`;
 }
 // Kopf der Wochenkarte mit Blättern (◀ frühere Woche, ▶ zurück Richtung heute)
 function weekHead(m, title){
@@ -1869,7 +1882,9 @@ function payMessage(x){
   const tier = isHens() ? '🐔' : '🐐';
   const dank = x.purpose ? `Vielen Dank für ${x.purpose} vom Rainäcker Hof! 🥚` : 'Vielen Dank für deinen Einkauf beim Rainäcker Hof! 🥚';
   const betrag = x.amount > 0 ? ` (${eur(x.amount)})` : '';
-  return `${x.buyer ? `Hallo ${x.buyer}!` : 'Hallo!'} ${tier}\n${dank}\n\nDu kannst ganz bequem per PayPal bezahlen${betrag}:\n👉 ${x.link}\n\nLiebe Grüße vom Rainäcker Hof 💛`;
+  const name = (x.buyer || '').trim();
+  const anrede = !name ? 'Hallo!' : /^familie\s/i.test(name) ? `Hallo ${name}!` : `Hallo Familie ${name}!`;
+  return `${anrede} ${tier}\n${dank}\n\nDu kannst ganz bequem per PayPal bezahlen${betrag}:\n👉 ${x.link}\n\nLiebe Grüße vom Rainäcker Hof 💛`;
 }
 function sheetPay(o){
   if(!P().paypal && !S.admin){ toast('Der Admin muss zuerst den PayPal.me-Namen eintragen'); return; }
@@ -2341,7 +2356,7 @@ function manualCard(){
   const adminSec = !S.admin ? '' : manDet('admin', 'Tab Admin (nur für den Admin)', `<ul>
     <li><b>Offen auf einen Blick:</b> für Hühner und Ziegen die PayPal-Eingänge zum Prüfen, Bargeld bei Familien, offene Bestellungen, letzter Kassenabgleich, letzte Sicherung und bis wann der Dienstplan eingetragen ist. Rot heißt überfällig. Mit <b>↻</b> lädst du neu.</li>
     <li><b>Familien im Blick:</b> je Familie, wann sie zuletzt in der App war, wann sie sich zuletzt mit dem Code angemeldet hat, wann sie zuletzt etwas eingetragen hat und auf wie vielen Handys Benachrichtigungen und Erinnerungen eingeschaltet sind.</li>
-    <li><b>Wer bekommt was?:</b> Tippe auf eine Familie und nimm den Haken bei einer Art von Benachrichtigung weg (neue Bestellung, Bestellung kann raus, Dienst und Wochenrückblick, Bargeld einzahlen, Zahlung prüfen, Monatsabschluss). Das gilt sofort für alle Handys der Familie. Hinweise und Nachrichten, die du selbst verschickst, kommen immer an.</li>
+    <li><b>Wer bekommt was?:</b> Tippe auf eine Familie und nimm den Haken bei einer Art von Benachrichtigung weg (neue Bestellung, offene Bestellung für die Familie mit Dienst, Dienst und Wochenrückblick, Bargeld einzahlen, Zahlung prüfen, Monatsabschluss). Das gilt sofort für alle Handys der Familie. Hinweise und Nachrichten, die du selbst verschickst, kommen immer an.</li>
     <li><b>Hinweis an alle:</b> Text eingeben, optional ein Datum bei <b>Anzeigen bis</b>, dann <b>Veröffentlichen</b>. Er erscheint bei allen Familien des Projekts oben in der App und, wenn angehakt, als Benachrichtigung. <b>Entfernen</b> nimmt ihn zurück.</li>
     <li><b>Nachricht an eine Familie:</b> Familie wählen, Text eingeben, <b>Nachricht senden</b>. So prüfst du, ob Benachrichtigungen auf ihrem Handy ankommen.</li>
     <li><b>Erinnerungen:</b> ob der Zeitplan läuft und was die letzten Läufe um 18 Uhr verschickt haben. Mit <b>Vorschau anzeigen</b> siehst du für einen Tag, welche Erinnerungen rausgehen würden, mit <b>An mich senden</b> kommen sie nur auf dein Handy. Die Familien bekommen dabei nichts.</li>
@@ -2394,9 +2409,10 @@ function manualCard(){
       manDet('bestell', 'Bestellungen von Nachbarn', `<ul>
         <li>Auf der Nachbar-Seite (Link aus dem Tab <b>Hof</b>) können Nachbarn <b>Eier bestellen</b>. Sie tragen ihre Familie und die Stückzahl ein (bis 30). Ist gerade nicht genug frei, kommen sie auf die <b>Warteliste</b>.</li>
         <li>Neue Bestellungen erscheinen im Tab <b>Eier</b> in der Karte <b>Bestellungen von Nachbarn</b>. Am Reiter <b>Eier</b> zeigt ein roter Punkt mit Zahl, wie viele offen sind. Zieh zum Aktualisieren nach unten, wenn du sie gleich sehen willst.</li>
+        <li>Benachrichtigungen: Die Familie mit <b>Dienst</b> bekommt bei jeder neuen Bestellung eine Nachricht und danach alle 2 Stunden eine Erinnerung, solange die Bestellung offen ist (nur von 8 bis 20 Uhr, nicht für wartende Bestellungen). Die anderen Familien bekommen nur einmal die Meldung, dass eine neue Bestellung da ist.</li>
         <li>Bestellte Eier gelten als reserviert. Die Nachbar-Seite zeigt keine Eieranzahl und keine Abholung mehr, weil ihr die Eier immer ausliefert.</li>
-        <li><b>Warteliste:</b> Bestellungen werden der Reihe nach bedient. Passt eine in den Vorrat, steht <b>bereit</b> daneben, sonst „wartet · Platz n“. Kommt eine Bestellung auf die Warteliste, bekommen alle Familien eine Nachricht. Wird sie später bereit, bekommt die Familie mit Dienst Bescheid. Nach 7 Tagen verfällt eine wartende Bestellung, der Nachbar sieht das auf seiner Seite.</li>
-        <li><b>Verkauft:</b> Tippe darauf, wenn du die Eier ausgibst. Name und Anzahl sind schon eingetragen, der Preis ist der externe. Nach dem Speichern ist die Bestellung erledigt und das Geld in der Kasse.</li>
+        <li><b>Warteliste:</b> Bestellungen werden der Reihe nach bedient. Passt eine in den Vorrat, steht <b>bereit</b> daneben, sonst „wartet · Platz n“. Wird eine wartende Bestellung später bereit, bekommt die Familie mit Dienst Bescheid. Nach 7 Tagen verfällt eine wartende Bestellung, der Nachbar sieht das auf seiner Seite.</li>
+        <li><b>Verkaufen:</b> Tippe darauf, wenn du die Eier ausgibst. Name und Anzahl sind schon eingetragen, der Preis ist der externe. Nach dem Speichern ist die Bestellung erledigt und das Geld in der Kasse.</li>
         <li><b>✕</b> lehnt eine Bestellung ab. Die Eier sind dann wieder frei. Erledigte und abgelehnte Bestellungen stehen unter „Erledigt“. Dort löschst du sie mit <b>✕</b>, zum Beispiel Testbestellungen.</li></ul>`),
       manDet('zahlkontrolle', 'Zahlungen kontrollieren, Trinkgeld und Kassenabgleich', `<ul>
         <li>Jeder Verkauf und jede Zusatz-Eier-Buchung zeigt in der <b>Kasse</b>, welche Familie verkauft bzw. genommen hat, und den Zahlungsstand darunter.</li>
@@ -2620,8 +2636,8 @@ function admFamCard(){
 
 /* Wer bekommt was? Schalter je Familie und Art der Benachrichtigung (Tabelle push_prefs, gelesen von notify-order) */
 const PUSH_KINDS = [
-  ['order_new', 'Neue Bestellung', 'sobald ein Nachbar bestellt'],
-  ['order_ready', 'Bestellung kann raus', 'an die Familie mit Dienst'],
+  ['order_new', 'Neue Bestellung', 'einmal, an die Familien ohne Dienst'],
+  ['order_ready', 'Offene Bestellung (Dienst)', 'an die Familie mit Dienst, alle 2 Std. von 8 bis 20 Uhr'],
   ['duty', 'Dienst und Wochenrückblick', 'sonntags um 18 Uhr'],
   ['cash', 'Bargeld einzahlen', 'ab 7 Tagen offen'],
   ['pay_check', 'Zahlung prüfen', 'geht nur an Admins'],
