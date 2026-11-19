@@ -412,7 +412,7 @@ async function loadProject(){
     supplies: su.data.map(s => ({id:s.id,name:s.name,days:s.days,set:s.set_on})),
     events: ev.data.map(e => ({id:e.id,date:e.date,end:e.end_date||'',title:e.title,kind:e.kind,fam:e.family_id||'',note:e.note,by:e.created_by})),
     cashChecks: cc.data.map(c => ({id:c.id, at:c.created_at, by:c.created_by, balance:Number(c.paypal_balance), expected:Number(c.expected), openCash:Number(c.open_cash), note:c.note})),
-    orders: od.data.map(o => ({id:o.id, created:o.created_at, buyer:o.buyer, qty:o.qty, status:o.status}))
+    orders: od.data.map(o => ({id:o.id, created:o.created_at, buyer:o.buyer, qty:o.qty, status:o.status, needBy:o.need_by||null}))
   };
   const paths = S.p.animals.filter(a => a.photoPath).map(a => a.photoPath);
   if(paths.length){
@@ -684,14 +684,16 @@ function ordersCard(){
   const done = all.filter(o => !orderLive(o)).slice(-8).reverse();
   if(!all.length) return '';
   const eggs = n => `${n} Ei${n===1?'':'er'}`;
+  // Frist vom Nachbarn („Spätestens benötigt bis“), nur wenn angegeben
+  const need = o => o.needBy ? `<div style="margin-top:4px;padding:3px 10px;border-radius:8px;display:inline-block;background:color-mix(in srgb, var(--yolk) 28%, transparent);color:var(--ink);font-weight:600">⏰ Benötigt bis: ${whenText(o.needBy)}</div>` : '';
   const DONE = {erledigt:'verkauft', abgelehnt:'abgelehnt', verfallen:'verfallen', offen:'verfallen'};
   return `
   <div class="card list" ${open.length?'style="border:2px solid var(--yolk)"':''}>
     <h2><span class="hi" aria-hidden="true">🛒</span>Bestellungen von Nachbarn</h2>
     ${open.length ? open.map(o => q[o.id].ready
-      ? `<div class="item"><div><strong>${esc(o.buyer)}</strong> <span class="pill">bereit</span><div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div></div>
+      ? `<div class="item"><div><strong>${esc(o.buyer)}</strong> <span class="pill">bereit</span><div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div>${need(o)}</div>
       <div style="display:flex;align-items:center;gap:6px"><button class="yolk small" onclick="sheetSale('${o.id}')">Verkaufen</button><button class="ghost" onclick="orderReject('${o.id}')" aria-label="Bestellung ablehnen">✕</button></div></div>`
-      : `<div class="item" style="flex-direction:column;align-items:stretch;gap:8px"><div class="row"><div><strong>${esc(o.buyer)}</strong> <span class="muted">wartet · Platz ${q[o.id].pos}</span><div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div></div><button class="ghost" onclick="orderReject('${o.id}')" aria-label="Bestellung ablehnen">✕</button></div>
+      : `<div class="item" style="flex-direction:column;align-items:stretch;gap:8px"><div class="row"><div><strong>${esc(o.buyer)}</strong> <span class="muted">wartet · Platz ${q[o.id].pos}</span><div class="muted">${eggs(o.qty)} · ${whenText(o.created)}</div>${need(o)}</div><button class="ghost" onclick="orderReject('${o.id}')" aria-label="Bestellung ablehnen">✕</button></div>
       </div>`).join('')
       : '<div class="empty">Keine offenen Bestellungen.</div>'}
     ${open.some(o => !q[o.id].ready) ? `<p class="muted" style="margin:8px 0 0">Wartende Bestellungen werden der Reihe nach bereit, sobald genug Eier im Vorrat sind. Nach ${ORDER_DAYS} Tagen verfällt eine Bestellung.</p>` : ''}
