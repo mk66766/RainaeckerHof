@@ -90,8 +90,21 @@ button:disabled{opacity:.5;cursor:default}
 .msg.ok{color:var(--good)}
 .msg.bad{color:var(--bad)}
 .hint{color:var(--muted);font-size:14px;margin:10px 0 0}
-.thanks{border:2px solid var(--yolk)}
-.thanks strong{font-size:19px}
+.done{text-align:center;padding:6px 0 2px}
+.done .tick{width:64px;height:64px;border-radius:50%;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:800;background:var(--good);color:var(--surface)}
+.done h3{font-family:var(--head);font-size:23px;margin:0 0 6px}
+.done .what{font-size:19px;font-weight:600;margin:0 0 8px}
+.done p{margin:0 0 6px}
+.done .badge{display:inline-block;border-radius:999px;padding:4px 12px;font-size:15px;font-weight:600;margin:4px 0 8px;background:var(--bg);border:1.5px solid var(--line)}
+.done .badge.ready{border-color:var(--good);color:var(--good)}
+.done button{margin-top:12px}
+.dup{border:2px solid var(--yolk);border-radius:14px;padding:14px;margin-top:14px}
+.dup p{margin:0 0 10px;font-weight:600}
+.dup .btns{display:flex;gap:8px}
+.dup .btns button{margin:0}
+.row .new{color:var(--good);font-weight:600}
+.orderbox-hi{border:2px solid var(--good)}
+@media (prefers-reduced-motion:no-preference){.done .tick{animation:pop .35s ease-out}@keyframes pop{0%{transform:scale(.4);opacity:0}70%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}}
 @media (prefers-reduced-motion:no-preference){.num{transition:opacity .2s}}
 </style>
 </head>
@@ -114,8 +127,6 @@ button:disabled{opacity:.5;cursor:default}
 
   <section class="card note" id="notebox" hidden><h2><span class="hi" aria-hidden="true">📝</span>Hinweis</h2><div id="note"></div></section>
 
-  <section class="card thanks" id="thanks" hidden aria-live="polite"><strong id="thanksTitle"></strong><p class="hint" id="thanksText" style="font-size:16px;color:inherit"></p></section>
-
   <section class="card" id="mine" hidden><h2><span class="hi" aria-hidden="true">📋</span>Deine Bestellungen</h2><div id="mineList"></div></section>
 
   <section class="card" id="orderbox" hidden>
@@ -129,9 +140,22 @@ button:disabled{opacity:.5;cursor:default}
       <div class="when"><input id="needDate" type="date" aria-label="Datum"><input id="needTime" type="time" aria-label="Uhrzeit"></div>
       <div class="hp" aria-hidden="true"><label for="hp">Bitte leer lassen</label><input id="hp" type="text" tabindex="-1" autocomplete="off"></div>
       <button class="yolk" id="send" type="submit">Bestellen</button>
+      <div class="dup" id="dup" hidden role="alertdialog" aria-labelledby="dupText">
+        <p id="dupText"></p>
+        <div class="btns"><button type="button" class="alt" id="dupNo">Nein, passt so</button><button type="button" class="yolk" id="dupYes">Ja, noch einmal</button></div>
+      </div>
       <p class="msg" id="orderMsg" role="status"></p>
     </form>
-    <p class="hint" id="orderHint">Deine Eier werden für dich zurückgelegt. Du holst sie bei der Familie ab, die oben steht.</p>
+    <div class="done" id="done" hidden role="status" aria-live="polite" tabindex="-1">
+      <div class="tick" aria-hidden="true">✓</div>
+      <h3 id="doneTitle">Bestellung ist angekommen</h3>
+      <p class="what" id="doneWhat"></p>
+      <span class="badge" id="doneBadge"></span>
+      <p id="doneText"></p>
+      <p class="hint">Du musst nichts weiter tun. Den Stand siehst du jederzeit oben unter „Deine Bestellungen“.</p>
+      <button type="button" class="alt" id="again">Weitere Eier bestellen</button>
+    </div>
+    <p class="hint" id="orderHint">Wir liefern die Eier zu dir.</p>
   </section>
 
   <button id="reload" class="alt" type="button">↻ Aktualisieren</button>
@@ -148,6 +172,8 @@ const NAME_KEY = 'hof-nachbar-name', ORD_KEY = 'hof-nachbar-bestellungen';
 const myOrders = { get(){ try{ return JSON.parse(localStorage.getItem(ORD_KEY) || '[]').filter(x => x && x.id && Date.now() - x.t < 14 * 864e5); }catch(e){ return []; } },
   set(list){ try{ localStorage.setItem(ORD_KEY, JSON.stringify(list.slice(-10))); }catch(e){} } };
 const store = { get(){ try{ return localStorage.getItem(NAME_KEY) || ''; }catch(e){ return ''; } }, set(v){ try{ localStorage.setItem(NAME_KEY, v); }catch(e){} } };
+const DUP_MIN = 30;   // gleiche Bestellung innerhalb von 30 Minuten: erst nachfragen
+let busy = false, dupOk = false, lastId = null;
 // Frist aus Datum + Uhrzeit (Ortszeit des Handys); ohne Datum keine Frist, ohne Uhrzeit 18:00 Uhr
 function needBy(){
   const d = $('needDate').value; if(!d) return null;
@@ -194,7 +220,9 @@ async function loadMine(){
     const txt = o => o.status === 'bereit' ? 'wir liefern bald'
       : o.status === 'wartet' ? 'auf der Warteliste' + (o.pos ? ', Platz ' + o.pos : '')
       : o.status === 'erledigt' ? 'geliefert, danke!' : o.status === 'abgelehnt' ? 'leider abgelehnt' : 'verfallen (nach 7 Tagen)';
-    $('mineList').innerHTML = rows.map(o => `<div class="row"><span>${o.qty} ${o.qty === 1 ? 'Ei' : 'Eier'} · ${new Date(o.created).toLocaleDateString('de-DE', {day:'numeric', month:'short'})}</span><strong>${txt(o)}</strong></div>`).join('');
+    rows.sort((a, b) => new Date(b.created) - new Date(a.created));
+    const when = c => { const d = new Date(c); return d.toLocaleDateString('de-DE', {day:'numeric', month:'short'}) + ', ' + d.toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'}) + ' Uhr'; };
+    $('mineList').innerHTML = rows.map(o => `<div class="row"><span>${o.qty} ${o.qty === 1 ? 'Ei' : 'Eier'} · ${when(o.created)}${o.id === lastId ? ' <span class="new">· neu</span>' : ''}</span><strong>${txt(o)}</strong></div>`).join('');
     $('mine').hidden = false;
   }catch(e){ console.error(e); }
 }
@@ -208,8 +236,39 @@ async function load(){
   }catch(e){ console.error(e); fail(); }
   $('reload').disabled = false;
 }
+const eggs = n => n + (n === 1 ? ' Ei' : ' Eier');
+// eine gleiche Bestellung (Name + Anzahl) von diesem Gerät in den letzten DUP_MIN Minuten
+function recentSame(who, qty){
+  const k = who.toLowerCase();
+  return myOrders.get().filter(x => x.who && x.who.toLowerCase() === k && x.qty === qty && Date.now() - x.t < DUP_MIN * 6e4).pop();
+}
+function showForm(){
+  $('done').hidden = true; $('orderform').hidden = false; $('orderHint').hidden = false;
+  $('orderbox').classList.remove('orderbox-hi');
+  $('qty').value = ''; $('orderMsg').textContent = ''; $('dup').hidden = true;
+  $('qty').focus();
+}
+function showDone(who, qty, res, need){
+  $('orderform').hidden = true; $('orderHint').hidden = true; $('dup').hidden = true;
+  $('doneTitle').textContent = 'Danke, ' + who + '! Deine Bestellung ist angekommen.';
+  $('doneWhat').textContent = eggs(qty) + ' bestellt';
+  const b = $('doneBadge');
+  if(res.waiting){
+    b.textContent = 'Warteliste, Platz ' + (res.pos || 1); b.className = 'badge';
+    $('doneText').textContent = 'Gerade sind nicht genug Eier da. Sobald genug gelegt sind, liefern wir sie dir. Nach 7 Tagen verfällt die Bestellung.';
+  } else {
+    b.textContent = 'Eier sind für dich da'; b.className = 'badge ready';
+    $('doneText').textContent = 'Die Eier sind für dich zurückgelegt. Wir liefern sie dir.';
+  }
+  if(need) $('doneText').textContent += ' Benötigt bis ' + need.toLocaleDateString('de-DE', {weekday:'short', day:'numeric', month:'short'}) + ', ' + need.toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'}) + ' Uhr.';
+  $('done').hidden = false; $('orderbox').classList.add('orderbox-hi');
+  $('orderbox').scrollIntoView({behavior:'smooth', block:'start'});
+  try{ $('done').focus({preventScroll:true}); }catch(e){}
+  if(navigator.vibrate) try{ navigator.vibrate(40); }catch(e){}
+}
 async function order(ev){
   ev.preventDefault();
+  if(busy) return;
   const msg = $('orderMsg'), who = $('who').value.trim(), qty = Math.floor(Number($('qty').value));
   const say = (t, ok) => { msg.textContent = t; msg.className = 'msg ' + (ok ? 'ok' : 'bad'); };
   if(who.length < 2){ say('Bitte gib deine Familie an.', false); $('who').focus(); return; }
@@ -217,7 +276,15 @@ async function order(ev){
   const need = needBy();
   if(need === undefined){ say('Bitte prüfe Datum und Uhrzeit.', false); $('needDate').focus(); return; }
   if(need && need.getTime() < Date.now()){ say('Datum und Uhrzeit liegen in der Vergangenheit.', false); $('needDate').focus(); return; }
-  $('send').disabled = true; say('Einen Moment …', true);
+  const same = !dupOk && recentSame(who, qty);
+  if(same){
+    const min = Math.max(1, Math.round((Date.now() - same.t) / 6e4));
+    $('dupText').textContent = 'Du hast vor ' + (min === 1 ? 'einer Minute' : min + ' Minuten') + ' schon ' + eggs(qty) + ' bestellt. Die Bestellung ist angekommen. Möchtest du wirklich noch einmal ' + eggs(qty) + ' bestellen?';
+    $('dup').hidden = false; say('', true); $('send').disabled = true; $('dupNo').focus();
+    return;
+  }
+  dupOk = false; $('dup').hidden = true;
+  busy = true; $('send').disabled = true; $('send').textContent = 'Wird gesendet …'; say('', true);
   try{
     const body = {p_buyer: who, p_qty: qty, p_hp: $('hp').value};
     if(need) body.p_need_by = need.toISOString();   // nur mitschicken, wenn angegeben
@@ -226,21 +293,20 @@ async function order(ev){
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const res = await r.json();
     if(res && res.ok){
-      store.set(who); say('', true); $('needDate').value = ''; $('needTime').value = '';
-      if(res.id) myOrders.set([...myOrders.get(), {id: res.id, t: Date.now()}]);
-      $('thanksTitle').textContent = 'Danke, ' + who + '!';
-      $('thanksText').textContent = res.waiting
-        ? 'Gerade sind nicht genug Eier da. Du stehst auf Platz ' + (res.pos || 1) + ' der Warteliste. Sobald Eier für dich da sind, steht das hier unter „Deine Bestellungen“. Wir liefern sie dir dann.'
-        : qty + (qty === 1 ? ' Ei ist' : ' Eier sind') + ' für dich zurückgelegt. Wir liefern sie dir.';
-      $('thanks').hidden = false; $('thanks').scrollIntoView({behavior:'smooth', block:'center'});
-      await load();
+      store.set(who); $('needDate').value = ''; $('needTime').value = '';
+      if(res.id){ lastId = res.id; myOrders.set([...myOrders.get(), {id: res.id, t: Date.now(), who, qty}]); }
+      showDone(who, qty, res, need);
+      load();
     } else {
       say((res && res.message) || 'Das hat leider nicht geklappt. Bitte versuche es noch einmal.', false);
-      await load();
+      load();
     }
-  }catch(e){ console.error(e); say('Die Bestellung konnte gerade nicht gesendet werden. Bitte versuche es gleich noch einmal.', false); }
-  $('send').disabled = false;
+  }catch(e){ console.error(e); say('Die Bestellung konnte gerade nicht gesendet werden. Bitte prüfe kurz unter „Deine Bestellungen“, ob sie schon angekommen ist, bevor du es noch einmal versuchst.', false); load(); }
+  busy = false; $('send').disabled = false; $('send').textContent = 'Bestellen';
 }
+$('dupNo').addEventListener('click', () => { $('dup').hidden = true; $('send').disabled = false; showForm(); $('orderMsg').textContent = 'Alles gut, deine erste Bestellung gilt.'; $('orderMsg').className = 'msg ok'; });
+$('dupYes').addEventListener('click', () => { dupOk = true; $('dup').hidden = true; $('send').disabled = false; $('orderform').requestSubmit ? $('orderform').requestSubmit() : order(new Event('submit')); });
+$('again').addEventListener('click', showForm);
 $('orderform').addEventListener('submit', order);
 $('who').value = store.get();
 initNeed();
