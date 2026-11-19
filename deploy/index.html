@@ -2356,7 +2356,7 @@ function manualCard(){
   const adminSec = !S.admin ? '' : manDet('admin', 'Tab Admin (nur für den Admin)', `<ul>
     <li><b>Offen auf einen Blick:</b> für Hühner und Ziegen die PayPal-Eingänge zum Prüfen, Bargeld bei Familien, offene Bestellungen, letzter Kassenabgleich, letzte Sicherung und bis wann der Dienstplan eingetragen ist. Rot heißt überfällig. Mit <b>↻</b> lädst du neu.</li>
     <li><b>Familien im Blick:</b> je Familie, wann sie zuletzt in der App war, wann sie sich zuletzt mit dem Code angemeldet hat, wann sie zuletzt etwas eingetragen hat und auf wie vielen Handys Benachrichtigungen und Erinnerungen eingeschaltet sind.</li>
-    <li><b>Wer bekommt was?:</b> Tippe auf eine Familie und nimm den Haken bei einer Art von Benachrichtigung weg (neue Bestellung, Bestellung kann raus, Dienst und Wochenrückblick, Bargeld einzahlen, Zahlung prüfen, Monatsabschluss). Das gilt sofort für alle Handys der Familie. Hinweise und Nachrichten, die du selbst verschickst, kommen immer an.</li>
+    <li><b>Wer bekommt was?:</b> Tippe auf eine Familie und nimm den Haken bei einer Art von Benachrichtigung weg (neue Bestellung, offene Bestellung für die Familie mit Dienst, Dienst und Wochenrückblick, Bargeld einzahlen, Zahlung prüfen, Monatsabschluss). Das gilt sofort für alle Handys der Familie. Hinweise und Nachrichten, die du selbst verschickst, kommen immer an.</li>
     <li><b>Hinweis an alle:</b> Text eingeben, optional ein Datum bei <b>Anzeigen bis</b>, dann <b>Veröffentlichen</b>. Er erscheint bei allen Familien des Projekts oben in der App und, wenn angehakt, als Benachrichtigung. <b>Entfernen</b> nimmt ihn zurück.</li>
     <li><b>Nachricht an eine Familie:</b> Familie wählen, Text eingeben, <b>Nachricht senden</b>. So prüfst du, ob Benachrichtigungen auf ihrem Handy ankommen.</li>
     <li><b>Erinnerungen:</b> ob der Zeitplan läuft und was die letzten Läufe um 18 Uhr verschickt haben. Mit <b>Vorschau anzeigen</b> siehst du für einen Tag, welche Erinnerungen rausgehen würden, mit <b>An mich senden</b> kommen sie nur auf dein Handy. Die Familien bekommen dabei nichts.</li>
@@ -2409,8 +2409,9 @@ function manualCard(){
       manDet('bestell', 'Bestellungen von Nachbarn', `<ul>
         <li>Auf der Nachbar-Seite (Link aus dem Tab <b>Hof</b>) können Nachbarn <b>Eier bestellen</b>. Sie tragen ihre Familie und die Stückzahl ein (bis 30). Ist gerade nicht genug frei, kommen sie auf die <b>Warteliste</b>.</li>
         <li>Neue Bestellungen erscheinen im Tab <b>Eier</b> in der Karte <b>Bestellungen von Nachbarn</b>. Am Reiter <b>Eier</b> zeigt ein roter Punkt mit Zahl, wie viele offen sind. Zieh zum Aktualisieren nach unten, wenn du sie gleich sehen willst.</li>
+        <li>Benachrichtigungen: Die Familie mit <b>Dienst</b> bekommt bei jeder neuen Bestellung eine Nachricht und danach alle 2 Stunden eine Erinnerung, solange die Bestellung offen ist (nur von 8 bis 20 Uhr, nicht für wartende Bestellungen). Die anderen Familien bekommen nur einmal die Meldung, dass eine neue Bestellung da ist.</li>
         <li>Bestellte Eier gelten als reserviert. Die Nachbar-Seite zeigt keine Eieranzahl und keine Abholung mehr, weil ihr die Eier immer ausliefert.</li>
-        <li><b>Warteliste:</b> Bestellungen werden der Reihe nach bedient. Passt eine in den Vorrat, steht <b>bereit</b> daneben, sonst „wartet · Platz n“. Kommt eine Bestellung auf die Warteliste, bekommen alle Familien eine Nachricht. Wird sie später bereit, bekommt die Familie mit Dienst Bescheid. Nach 7 Tagen verfällt eine wartende Bestellung, der Nachbar sieht das auf seiner Seite.</li>
+        <li><b>Warteliste:</b> Bestellungen werden der Reihe nach bedient. Passt eine in den Vorrat, steht <b>bereit</b> daneben, sonst „wartet · Platz n“. Wird eine wartende Bestellung später bereit, bekommt die Familie mit Dienst Bescheid. Nach 7 Tagen verfällt eine wartende Bestellung, der Nachbar sieht das auf seiner Seite.</li>
         <li><b>Verkaufen:</b> Tippe darauf, wenn du die Eier ausgibst. Name und Anzahl sind schon eingetragen, der Preis ist der externe. Nach dem Speichern ist die Bestellung erledigt und das Geld in der Kasse.</li>
         <li><b>✕</b> lehnt eine Bestellung ab. Die Eier sind dann wieder frei. Erledigte und abgelehnte Bestellungen stehen unter „Erledigt“. Dort löschst du sie mit <b>✕</b>, zum Beispiel Testbestellungen.</li></ul>`),
       manDet('zahlkontrolle', 'Zahlungen kontrollieren, Trinkgeld und Kassenabgleich', `<ul>
@@ -2635,8 +2636,8 @@ function admFamCard(){
 
 /* Wer bekommt was? Schalter je Familie und Art der Benachrichtigung (Tabelle push_prefs, gelesen von notify-order) */
 const PUSH_KINDS = [
-  ['order_new', 'Neue Bestellung', 'sobald ein Nachbar bestellt'],
-  ['order_ready', 'Bestellung kann raus', 'an die Familie mit Dienst'],
+  ['order_new', 'Neue Bestellung', 'einmal, an die Familien ohne Dienst'],
+  ['order_ready', 'Offene Bestellung (Dienst)', 'an die Familie mit Dienst, alle 2 Std. von 8 bis 20 Uhr'],
   ['duty', 'Dienst und Wochenrückblick', 'sonntags um 18 Uhr'],
   ['cash', 'Bargeld einzahlen', 'ab 7 Tagen offen'],
   ['pay_check', 'Zahlung prüfen', 'geht nur an Admins'],
