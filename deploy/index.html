@@ -206,6 +206,9 @@ nav button[aria-current="page"]{color:var(--ink);background:color-mix(in srgb,va
 .seg{display:flex;gap:8px}
 .seg button{flex:1;background:var(--bg);color:var(--ink);border:1.5px solid var(--line)}
 .seg button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.fmchips{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 10px}
+.fmchips button{background:var(--bg);color:var(--ink);border:1.5px solid var(--line);border-radius:99px;padding:6px 14px;font-size:14px;font-weight:600}
+.fmchips button.on{background:var(--yolk);color:var(--yolk-ink);border-color:var(--yolk)}
 .empty{color:var(--muted);text-align:center;padding:14px 0}
 .toast.undo{display:flex;align-items:center;gap:12px;padding:8px 8px 8px 16px;z-index:40;max-width:94vw}
 .toast.undo button{background:var(--yolk);color:var(--yolk-ink);border-radius:99px;padding:6px 14px;font-size:14px;font-weight:700;flex:none}
@@ -2399,6 +2402,7 @@ function manualCard(){
   const protokoll = manDet('hof', 'Tab Hof und Einstellungen', `<ul>
     ${hens?`<li><b>Stall</b> (Tab Admin, Einstellungen): Hennenbestand (mit Datum, wenn sich die Zahl ändert), Eier pro Familie und Woche (jetzt ${q}), interner Preis (leer = Selbstkostenpreis) und externer Preis für Nachbarn.</li>
     <li><b>Nachbar-Seite:</b> Hier erzeugst du mit <b>Link für Nachbarn teilen</b> eine WhatsApp-Nachricht mit dem Link zu einer öffentlichen Seite. Dort sehen Nachbarn ohne Anmeldung den Preis und können Eier bestellen. Wie viele Eier gerade da sind und wer Dienst hat, zeigt die Seite nicht, ihr liefert die Eier immer aus. Der Link muss nur einmal verschickt werden.</li>`:''}
+    <li><b>Nachricht an Familien senden:</b> Antippen klappt die Karte auf. Wähle <b>Alle</b>, <b>Diensthabende</b> oder einzelne Familien, schreib die Nachricht (höchstens 200 Zeichen) und tippe auf <b>Senden an</b> (dort steht, an wen). Sie kommt als Benachrichtigung mit deinem Familiennamen, aber nur bei Familien, die Benachrichtigungen eingeschaltet haben. Höchstens eine Nachricht pro Minute und zehn am Tag.</li>
     <li><b>Darstellung:</b> <b>Automatisch</b> folgt dem Handy (hell oder dunkel), mit <b>Hell</b> oder <b>Dunkel</b> legst du es für dieses Handy fest.</li>
     <li>Nur für den Admin sichtbar: der Tab <b>Admin</b> mit den eingeklappten <b>Einstellungen</b> (${hens?'Stall, ':''}Zahlung, Erfassung), <b>Familien</b> und <b>Daten</b>. In der Kasse sind auch <b>Kassenabgleich</b> und <b>Monatsbericht teilen</b> nur für den Admin.</li>
     <li><b>Zahlung:</b> PayPal.me-Name für den QR-Code.</li>
@@ -2530,6 +2534,7 @@ function vHof(){
     <h2><span class="hi" aria-hidden="true">🏡</span>Nachbar-Seite</h2>
     <button class="yolk" style="width:100%" onclick="sheetNeighbors()">Link für Nachbarn teilen (WhatsApp)</button>
   </div>` : ''}
+  ${fmCard()}
   ${isHens() ? pushCard() : ''}
   <details class="card" ${hofOpen.theme?'open':''} ontoggle="hofOpen.theme=this.open">
     ${foldHead('🌓', 'Darstellung', th)}
@@ -2543,6 +2548,63 @@ function vHof(){
     <div class="row"><span>${fam(S.me).system ? 'Konto' : 'Familie'} <strong>${esc(fam(S.me).name)}</strong>${S.admin?' <span class="pill">Admin</span>':''}</span><button class="alt small" onclick="logout()">Abmelden</button></div>
     <p class="muted" style="margin:10px 0 0">Bei „${esc(p.name)}“ dabei: ${members().map(f => esc(f.name)).join(', ')}. Familien und Zuordnung ändert der Admin.</p>
   </div>`;
+}
+/* Nachricht an Familien (Tab Hof): kurze Push-Nachricht an alle oder ausgewählte Familien des Projekts.
+   Senden über notify-order {family_msg:true}; dort gelten 200 Zeichen, 1 Minute Abstand und 10 pro Tag je Familie. */
+const FM_MAX = 200;
+let fm = {open:false, to:'all', text:'', busy:false};    // to: 'all' oder Liste von Familien-IDs
+const fmOthers = () => members().filter(f => f.id !== S.me && !f.left);
+function fmDuty(){ const d = dutyFam(monday(new Date())); return fmOthers().some(f => f.id === d) ? d : null; }
+const fmIsDuty = () => { const d = fmDuty(); return !!d && Array.isArray(fm.to) && fm.to.length === 1 && fm.to[0] === d; };
+const fmLabel = () => fm.to === 'all' ? 'alle' : fmIsDuty() ? `${fam(fm.to[0]).name} (Dienst)` : fm.to.map(id => fam(id).name).join(', ');
+function fmCard(){
+  const others = fmOthers();
+  if(!others.length) return '';
+  if(Array.isArray(fm.to) && fm.to.some(id => !others.some(f => f.id === id))){   // nach Projektwechsel
+    fm.to = fm.to.filter(id => others.some(f => f.id === id)); if(!fm.to.length) fm.to = 'all';
+  }
+  const duty = fmDuty(), sel = id => Array.isArray(fm.to) && fm.to.includes(id);
+  const chip = (on, click, label) => `<button class="${on ? 'on' : ''}" aria-pressed="${on}" onclick="${click}">${label}</button>`;
+  const none = Array.isArray(fm.to) && !fm.to.length;
+  return `<details class="card" ${fm.open ? 'open' : ''} ontoggle="fm.open=this.open">
+    ${foldHead('📣', 'Nachricht an Familien senden', '')}
+    <div style="margin-top:10px">
+      <div class="muted" style="font-size:14px">An wen?</div>
+      <div class="fmchips">
+        ${chip(fm.to === 'all', 'fmTo(\'all\')', 'Alle')}
+        ${duty ? chip(fmIsDuty(), 'fmTo(\'duty\')', 'Diensthabende') : ''}
+        ${others.map(f => chip(sel(f.id) && !fmIsDuty(), `fmTo('${f.id}')`, esc(f.name))).join('')}
+      </div>
+      <textarea id="fmText" rows="3" maxlength="${FM_MAX}" aria-label="Nachricht" oninput="fm.text=this.value;fmCount()">${esc(fm.text)}</textarea>
+      <div class="muted" id="fmCount" style="font-size:14px;text-align:right">${fm.text.length} / ${FM_MAX}</div>
+      <button class="yolk" style="width:100%;margin-top:6px" onclick="fmSend()" ${fm.busy || none ? 'disabled' : ''}>${fm.busy ? 'Wird gesendet …' : none ? 'Bitte Empfänger wählen' : `Senden an ${esc(fmLabel())}`}</button>
+      <p class="muted" style="margin:8px 0 0;font-size:14px">Die Nachricht kommt als Benachrichtigung mit deinem Familiennamen. Familien, die Benachrichtigungen nicht eingeschaltet haben, bekommen sie nicht. Höchstens eine Nachricht pro Minute.</p>
+    </div>
+  </details>`;
+}
+function fmCount(){ const c = document.getElementById('fmCount'); if(c) c.textContent = `${fm.text.length} / ${FM_MAX}`; }
+function fmTo(k){
+  if(k === 'all') fm.to = 'all';
+  else if(k === 'duty') fm.to = fmIsDuty() ? 'all' : [fmDuty()];
+  else {
+    const cur = fm.to === 'all' || fmIsDuty() ? [] : fm.to;
+    fm.to = cur.includes(k) ? cur.filter(x => x !== k) : [...cur, k];
+    if(fm.to.length && fm.to.length === fmOthers().length) fm.to = 'all';
+  }
+  render();
+}
+async function fmSend(){
+  const text = fm.text.replace(/\s+/g, ' ').trim();
+  if(!text){ toast('Bitte einen Text eingeben'); return; }
+  if(Array.isArray(fm.to) && !fm.to.length){ toast('Bitte Empfänger wählen'); return; }
+  fm.busy = true; render();
+  try{
+    const r = await adminCall({family_msg:true, project_id:S.cur, to:fm.to, text});
+    const got = r.to.length - r.without.length;
+    toast(got > 0 ? `Gesendet an ${got} ${got === 1 ? 'Familie' : 'Familien'}${r.without.length ? `. Ohne Benachrichtigungen: ${r.without.join(', ')}` : ''}` : `Nicht zugestellt: ${r.without.join(', ')} ${r.without.length === 1 ? 'hat' : 'haben'} keine Benachrichtigungen eingeschaltet`);
+    if(got > 0) fm.text = '';
+  }catch(e){ toast(e.message === 'Datenbank-Update fehlt' ? 'Senden ist erst nach dem nächsten Datenbank-Update möglich' : (e.message || 'Fehler beim Senden')); }
+  fm.busy = false; render();
 }
 function backupInfo(){
   const d = P().lastBackup, days = d ? daysSince(d) : null;
@@ -2657,7 +2719,8 @@ const PUSH_KINDS = [
   ['cash', 'Bargeld einzahlen', 'ab 7 Tagen offen'],
   ['pay_check', 'Zahlung prüfen', 'geht nur an Admins'],
   ['month', 'Monatsabschluss', 'am 1., geht nur an Admins'],
-  ['door', 'Neue Türzeiten', 'wenn jemand die Automatiktür umstellt']
+  ['door', 'Neue Türzeiten', 'wenn jemand die Automatiktür umstellt'],
+  ['family_msg', 'Nachrichten von Familien', 'aus dem Tab Hof, „Nachricht an Familien senden“']
 ];
 const ADMIN_KINDS = ['pay_check','month'];
 const kindsOf = f => PUSH_KINDS.filter(k => f.admin || !ADMIN_KINDS.includes(k[0]));

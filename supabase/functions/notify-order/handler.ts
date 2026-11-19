@@ -7,6 +7,7 @@
 //     dazu alle 2 Stunden, 8 bis 20 Uhr, eine Erinnerung an die Familie mit Dienst für jede offene bereite Bestellung)
 //  4) Admin-Tab: angemeldeter Admin (JWT), Body {admin:"message"|"notice"|"preview", ...}
 //  6) Türzeiten geändert: angemeldetes Mitglied (JWT), Body {door:<door_times.id>} → an die anderen Familien des Projekts
+//  7) Nachricht an Familien (Tab Hof): angemeldetes Mitglied (JWT), Body {family_msg:true, project_id, to:"all"|[family_id], text}
 import { berlinNow, buildReminders, mergePerUser, type Now } from "./reminders.ts";
 import { dueOrders, dutyMsg, dutyWaitMsg, eggs, infoMsg, type Msg, type OpenOrder } from "./orders.ts";
 export type Deps = {
@@ -66,6 +67,8 @@ export function makeHandler(d: Deps) {
       payload = { title: "Test erfolgreich", body: "So sehen Benachrichtigungen vom Rainäcker Hof aus.", url: `${site}/`, tag: "test" };
     } else if (typeof body?.door === "string") {
       return await sendDoor(d, cfg, site, req, body.door);
+    } else if (body?.family_msg === true) {
+      return await sendFamilyMsg(d, cfg, site, req, body);
     } else if (typeof body?.admin === "string") {
       return await adminAction(d, cfg, site, req, body);
     } else {
@@ -180,6 +183,56 @@ async function sendDoor(d: Deps, cfg: Record<string, string>, site: string, req:
   };
   try { return json(await sendTo(d, cfg, site, uids, () => p, { TTL: 86400, urgency: "normal" })); }
   catch (e: any) { return json({ error: e?.message || "Fehler" }, 500); }
+}
+
+// Nachricht einer Familie an alle oder ausgewählte Familien des Projekts (Tab Hof).
+// Grenzen gegen Missbrauch: höchstens FMSG_MAX_LEN Zeichen, Absendername steht immer im Titel, eine Nachricht pro
+// FMSG_GAP_SEC Sekunden und höchstens FMSG_PER_DAY in 24 Stunden je Familie (Protokoll in family_messages).
+// Empfänger nur aktive Familien des Projekts, nie der Absender, keine Admin-Konten bei „alle“; Art family_msg abschaltbar.
+export const FMSG_MAX_LEN = 200, FMSG_GAP_SEC = 60, FMSG_PER_DAY = 10;
+async function sendFamilyMsg(d: Deps, cfg: Record<string, string>, site: string, req: Request, body: any): Promise<Response> {
+  const a = d.admin;
+  const jwt = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  const { data: u, error: ue } = jwt ? await a.auth.getUser(jwt) : { data: null, error: true };
+  if (ue || !u?.user) return json({ error: "nicht angemeldet" }, 401);
+  const text = String(body.text || "").replace(/\s+/g, " ").trim();
+  if (!text) return json({ error: "Bitte einen Text eingeben" }, 400);
+  if (text.length > FMSG_MAX_LEN) return json({ error: `Höchstens ${FMSG_MAX_LEN} Zeichen` }, 400);
+  const { data: p } = await a.from("projects").select("id,kind").eq("id", body.project_id).maybeSingle();
+  if (!p) return json({ error: "Projekt nicht gefunden" }, 404);
+  const { data: fams, error: fe } = await a.from("families").select("id,name,user_id,left_on,is_system");
+  if (fe) return json({ error: "Daten nicht lesbar" }, 500);
+  const me = (fams || []).find((f: any) => f.user_id === u.user.id && !f.left_on);
+  const { data: mem } = await a.from("project_members").select("family_id").eq("project_id", p.id);
+  const fids: string[] = (mem || []).map((m: any) => m.family_id);
+  if (!me || !fids.includes(me.id)) return json({ error: "nicht erlaubt" }, 403);
+  const active = (fams || []).filter((f: any) => fids.includes(f.id) && !f.left_on && f.id !== me.id);
+  let to: any[];
+  if (body.to === "all") to = active.filter((f: any) => !f.is_system);
+  else if (Array.isArray(body.to) && body.to.length) {
+    to = active.filter((f: any) => body.to.includes(f.id));
+    if (to.length !== new Set(body.to).size) return json({ error: "Empfänger nicht im Projekt" }, 400);
+  } else return json({ error: "Bitte Empfänger wählen" }, 400);
+  if (!to.length) return json({ error: "Keine Empfänger" }, 400);
+
+  const now = d.now ? d.now() : new Date();
+  const { data: last, error: le } = await a.from("family_messages").select("created_at").eq("from_family", me.id)
+    .gte("created_at", new Date(now.getTime() - 864e5).toISOString()).order("created_at", { ascending: false });
+  if (le) return json({ error: "Datenbank-Update fehlt" }, 503);
+  if (last?.length && now.getTime() - new Date(last[0].created_at).getTime() < FMSG_GAP_SEC * 1000) return json({ error: "Bitte eine Minute warten" }, 429);
+  if ((last?.length || 0) >= FMSG_PER_DAY) return json({ error: `Heute schon ${FMSG_PER_DAY} Nachrichten gesendet` }, 429);
+
+  const off = await usersOff(d, "family_msg");
+  const uids = to.map((f: any) => f.user_id).filter((x: any) => x && !off.has(x));
+  const { data: subs } = uids.length ? await a.from("push_subscriptions").select("user_id").in("user_id", uids) : { data: [] };
+  const withDev = new Set((subs || []).map((s: any) => s.user_id));
+  const title = me.is_system ? "Nachricht vom Admin" : `Nachricht von ${/^familie\b/i.test(me.name) ? "" : "Familie "}${me.name}`;
+  const pl: Payload = { title, body: text, url: `${site}/#hof:${p.kind}`, tag: `familie-${me.id}-${now.getTime()}` };
+  try {
+    const res = await sendTo(d, cfg, site, uids, () => pl, { TTL: 86400, urgency: "high" });
+    await a.from("family_messages").insert({ project_id: p.id, from_family: me.id, to_families: to.map((f: any) => f.id), text, sent: res.sent });
+    return json({ ...res, to: to.map((f: any) => f.name), without: to.filter((f: any) => !withDev.has(f.user_id)).map((f: any) => f.name) });
+  } catch (e: any) { return json({ error: e?.message || "Fehler" }, 500); }
 }
 
 // Warteliste: Bestellungen, die jetzt in den Überschuss passen, an die Familie mit Dienst (ohne Dienst: an alle des Projekts)
