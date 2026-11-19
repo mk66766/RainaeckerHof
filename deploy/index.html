@@ -192,6 +192,22 @@ nav button svg{width:24px;height:24px}
 .step input{flex:1;text-align:center;font-size:20px;font-weight:600;min-width:0}
 .step button{flex:none;width:56px;font-size:26px;line-height:1;padding:0}
 details.info{margin-top:10px}
+.note-warn{margin-top:12px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb, var(--yolk) 28%, transparent);border:1.5px solid var(--yolk);color:var(--ink);font-size:14px;font-weight:500}
+label.tick{display:flex;align-items:center;gap:10px;font-weight:600;margin-top:12px;cursor:pointer}
+label.tick input{width:22px;height:22px;flex:none;margin:0;accent-color:var(--yolk)}
+.vday{border-top:1px solid var(--line)}
+.vday>summary{list-style:none;cursor:pointer;padding:10px 0 10px 18px;position:relative;display:block}
+.vday>summary::-webkit-details-marker{display:none}
+.vday>summary .vs{display:block;font-size:14px;color:var(--muted);margin-top:2px}
+.vday>summary::before{content:'▸';color:var(--muted);position:absolute;left:0;top:10px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chips button{flex:none;padding:6px 12px;border-radius:99px;font-size:14px;background:var(--bg);color:var(--ink);border:1.5px solid var(--line)}
+.chips button.on{background:var(--yolk);color:var(--yolk-ink);border-color:var(--yolk)}
+.vday[open]>summary::before{content:'▾'}
+.vday .item{padding:8px 0 8px 14px}
+.vgrp>summary{list-style:none;cursor:pointer}
+.vgrp>summary::-webkit-details-marker{display:none}
+.vgrp .item{padding-left:28px}
 details.info>summary{list-style:none;cursor:pointer;color:var(--muted);font-size:14px;display:inline-block;padding:4px 0}
 details.info>summary::-webkit-details-marker{display:none}
 details.info[open]>summary{margin-bottom:4px}
@@ -406,7 +422,7 @@ async function loadProject(){
     live: st.live_start || '',
     paypal: st.paypal_me || '',
     lastBackup: st.last_backup || '',
-    log: log.data.map(l => ({id:l.id,type:l.type,date:l.date,n:l.n,fam:l.family_id,buyer:l.buyer,price:l.price===null?null:Number(l.price),txId:l.tx_id,auto:l.auto,by:l.created_by,at:l.created_at})),
+    log: log.data.map(l => ({id:l.id,type:l.type,date:l.date,n:l.n,fam:l.family_id,buyer:l.buyer,price:l.price===null?null:Number(l.price),txId:l.tx_id,auto:l.auto,by:l.created_by,at:l.created_at,note:l.note||'',prev:l.prev??null})),
     tx: tx.data.map(t => ({id:t.id,date:t.date,kind:t.kind,amt:Number(t.amount),desc:t.description,fam:t.family_id,seller:t.seller_id,method:t.pay_method,state:t.pay_state,parent:t.parent_id,by:t.created_by,at:t.created_at,confirmedAt:t.confirmed_at,confirmedBy:t.confirmed_by})),
     swaps, checks,
     door: {history: dr.data.map(d => ({date:d.changed_on,open:String(d.opens_at).slice(0,5),close:String(d.closes_at).slice(0,5),fam:d.family_id,note:d.note}))},
@@ -524,7 +540,9 @@ const actions = ok => `<div class="actions"><button class="alt" onclick="closeSh
 /* ================= HÜHNER: Eier ================= */
 const laidOn = d => sum(P().log.filter(l=>l.type==='laid'&&l.date===d), l=>l.n);
 const isLive = d => !P().live || d >= P().live;
-const stock = () => sum(P().log.filter(l => isLive(l.date)), l => l.type==='laid' ? l.n : l.type==='verzicht' ? 0 : -l.n);
+// Wirkung eines Eintrags auf den Vorrat; „korrektur“ = Übertrag von Hand korrigiert (n mit Vorzeichen)
+const eggDelta = l => l.type==='laid' || l.type==='korrektur' ? l.n : l.type==='verzicht' ? 0 : -l.n;
+const stock = () => sum(P().log.filter(l => isLive(l.date)), eggDelta);
 const laidLive = () => sum(P().log.filter(l => l.type==='laid' && isLive(l.date)), l => l.n);
 async function dutyCheck(date, was){
   const mon = monday(parseD(date)), dutyId = dutyFam(mon);
@@ -562,7 +580,6 @@ async function addLaid(n, date, manual){
 }
 function vEier(){
   const p = P(), t = today(), n = laidOn(t), st = stock(), wkLaid = weekStats(monday(new Date())).laid, dutyF = dutyFam(monday(new Date()));
-  const recent = [...p.log].sort((a,b)=> b.date.localeCompare(a.date) || String(b.at||'').localeCompare(String(a.at||'')) || String(b.id).localeCompare(String(a.id))).slice(0,20);
   return `${dutyNote()}
   <div class="card hero">
     <div class="duty ${dutyF===S.me?'mine':''}"><span>Dienst KW ${isoWeek(monday(new Date()))}</span><b>${esc(fam(dutyF).name)}</b></div>
@@ -575,15 +592,79 @@ function vEier(){
   ${ordersCard()}
   ${weekCard()}
   ${statCard()}
-  <details class="card list" ${verlaufOpen?'open':''} ontoggle="verlaufOpen=this.open">
+  <details class="card list" ${verlaufOpen?'open':''} ontoggle="if(verlaufOpen!==this.open){verlaufOpen=this.open;render()}">
     <summary><h2 style="margin:0"><span class="hi" aria-hidden="true">🕘</span>Verlauf</h2></summary>
-    <div style="margin-top:10px">${recent.length ? recent.map(l=>`<div class="item"><div>${logText(l)}<div class="muted">${logMeta(l, true)}</div></div><button class="ghost" onclick="delLog('${l.id}')" aria-label="Löschen">✕</button></div>`).join('') : '<div class="empty">Noch nichts eingetragen. Tippe aufs Ei!</div>'}</div>
+    ${verlaufOpen ? verlaufBody() : ''}
   </details>
 `;
 }
 
+/* ---- Verlauf: pro Tag zusammengefasst, mit Zeitraum und Art ---- */
+let verlaufOpen = false, vlDays = 7, vlKind = 'alle', vlOpen = {};
+const VL_KINDS = [['alle','Alle'],['laid','Gelegt'],['take','Genommen'],['sale','Verkäufe'],['korr','Korrekturen']];
+const vlDay = l => l.type === 'korrektur' && l.at ? ds(new Date(l.at)) : l.date;     // Korrektur unter dem Tag, an dem sie gemacht wurde
+const vlKindOf = l => l.type === 'laid' ? (l.auto === false && l.by ? 'nach' : 'laid') : l.type === 'take' || l.type === 'zusatz' ? 'take' : l.type === 'sale' ? 'sale' : l.type === 'korrektur' ? 'korr' : 'x';
+const vlMatch = l => vlKind === 'alle' || vlKindOf(l) === vlKind || (vlKind === 'laid' && vlKindOf(l) === 'nach') || (vlKind === 'korr' && vlKindOf(l) === 'nach');
+function vlSet(k, v){ if(k === 'days') vlDays = v; else vlKind = v; render(); }
+function vlTog(d, open){ vlOpen[d] = open; }
+function vlSums(ls){
+  const n = f => sum(ls.filter(f), l => l.n);
+  return {laid: n(l => l.type === 'laid'), take: n(l => l.type === 'take' || l.type === 'zusatz'), sale: n(l => l.type === 'sale'), korr: ls.filter(l => l.type === 'korrektur').length, nach: n(l => vlKindOf(l) === 'nach')};
+}
+function vlSumText(x){
+  const parts = [];
+  if(vlKind === 'alle' || vlKind === 'laid') parts.push(`🥚 ${x.laid} gelegt`);
+  if(vlKind === 'alle' || vlKind === 'take') parts.push(`👪 ${x.take} genommen`);
+  if(vlKind === 'alle' || vlKind === 'sale') parts.push(`💶 ${x.sale} verkauft`);
+  if(x.korr && (vlKind === 'alle' || vlKind === 'korr')) parts.push(`✎ ${x.korr} Übertrag-Korrektur${x.korr === 1 ? '' : 'en'}`);
+  if(x.nach && vlKind === 'korr') parts.push(`➕ ${x.nach} nachgetragen`);
+  return parts.join(' · ');
+}
+const vlMeta = l => { if(l.type !== 'korrektur') return logMeta(l, false); const m = parseD(l.date); m.setDate(m.getDate() + 1);
+  return [l.at ? hm(l.at) + ' Uhr' : '', (famByUid(l.by) || {}).name || '', `Übertrag in KW ${isoWeek(m)}`].filter(Boolean).join(' · '); };
+const vlItem = l => `<div class="item"><div>${logText(l)}<div class="muted" style="font-size:14px">${vlMeta(l) || '&nbsp;'}</div></div><button class="ghost" onclick="delLog('${l.id}')" aria-label="Löschen">✕</button></div>`;
+const hm = at => at ? new Date(at).toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'}) : '';
+// Gezählte Eier (je Tipp ein Eintrag) einer Person werden zu einer Zeile zusammengefasst, aufklappbar zu den Einzel-Einträgen
+function vlDayBody(ls){
+  const out = [], seen = new Set();
+  ls.forEach(l => {
+    if(seen.has(l.id)) return;
+    if(l.type === 'laid' && l.auto !== false){
+      const grp = ls.filter(x => x.type === 'laid' && x.auto !== false && x.by === l.by);
+      grp.forEach(x => seen.add(x.id));
+      if(grp.length > 1){
+        const n = sum(grp, x => x.n), f = famByUid(l.by), ts = grp.map(x => hm(x.at)).filter(Boolean).sort();
+        out.push(`<details class="vgrp"><summary class="item"><div>${n} Eier gelegt <span class="muted">▾ einzeln</span><div class="muted" style="font-size:14px">${[ts.length ? (ts[0] === ts[ts.length-1] ? ts[0] : `${ts[0]}–${ts[ts.length-1]}`) + ' Uhr' : '', f ? f.name : ''].filter(Boolean).join(' · ')}</div></div></summary>${grp.map(vlItem).join('')}</details>`);
+        return;
+      }
+    }
+    seen.add(l.id); out.push(vlItem(l));
+  });
+  return out.join('');
+}
+function verlaufBody(){
+  const p = P(), t = today(), from = new Date(); from.setDate(from.getDate() - (vlDays - 1)); const fromS = Number.isFinite(vlDays) ? ds(from) : '';
+  const all = p.log.filter(vlMatch), inR = all.filter(l => vlDay(l) >= fromS);
+  const older = all.some(l => vlDay(l) < fromS);
+  const byDay = {}; inR.forEach(l => (byDay[vlDay(l)] = byDay[vlDay(l)] || []).push(l));
+  const days = Object.keys(byDay).sort().reverse();
+  const seg = (k, opts, cur) => `<div class="seg" style="margin:8px 0 0">${opts.map(([v, lbl]) => `<button class="${cur === v ? 'on' : ''}" onclick="vlSet('${k}', ${typeof v === 'number' ? v : `'${v}'`})">${lbl}</button>`).join('')}</div>`;
+  const rangeLbl = !Number.isFinite(vlDays) ? 'Alles' : vlDays === 1 ? 'Heute' : `Letzte ${vlDays} Tage`;
+  const tot = vlSums(inR);
+  return `<div style="margin-top:6px">
+    ${seg('days', [[7,'7 Tage'],[30,'30 Tage'],[Infinity,'Alles']], vlDays)}
+    <div class="chips">${VL_KINDS.map(([v, lbl]) => `<button class="${vlKind === v ? 'on' : ''}" onclick="vlSet('kind','${v}')">${lbl}</button>`).join('')}</div>
+    <p class="muted" style="margin:10px 0 4px;font-size:14px"><b>${rangeLbl}:</b> ${vlSumText(tot)}</p>
+    ${days.length ? days.map(d => {
+      const ls = byDay[d].sort((a,b) => String(b.at||'').localeCompare(String(a.at||'')) || String(b.id).localeCompare(String(a.id)));
+      const open = d in vlOpen ? vlOpen[d] : d === t;
+      return `<details class="vday" ${open ? 'open' : ''} ontoggle="vlTog('${d}', this.open)"><summary><strong>${d === t ? 'Heute' : parseD(d).toLocaleDateString('de-DE', {weekday:'short', day:'numeric', month:'short'})}</strong><span class="vs">${vlSumText(vlSums(ls))}</span></summary>${vlDayBody(ls)}</details>`;
+    }).join('') : `<div class="empty">${p.log.length ? 'In diesem Zeitraum gibt es keine passenden Einträge.' : 'Noch nichts eingetragen. Tippe aufs Ei!'}</div>`}
+    ${older ? `<button class="ghost" style="margin-top:8px" onclick="vlSet('days', ${vlDays} + ${vlDays < 30 ? 7 : 30})">Ältere Tage laden</button>` : ''}
+  </div>`;
+}
+
 /* ---- Statistik (Tage / Wochen / Monate) ---- */
-let verlaufOpen = false;
 let statView = 'tage', statOff = 0;
 function statNav(k){ statOff = Math.min(0, statOff + k); render(); }
 function eggsByDay(){ const m = {}; P().log.forEach(l => { if(l.type === 'laid') m[l.date] = (m[l.date] || 0) + l.n; }); return m; }
@@ -811,12 +892,47 @@ function weekCard(){
 // Einklappbare Rechnung unter dem Vorrat: Übertrag + gelegt − genommen − verkauft = Vorrat (wie stock(), nur ab Live-Start)
 function stockCalc(m){
   const s = ds(m), lg = P().log.filter(l => isLive(l.date)), wk = lg.filter(l => l.date >= s);
-  const carry = sum(lg.filter(l => l.date < s), l => l.type==='laid' ? l.n : l.type==='verzicht' ? 0 : -l.n);
+  const carry = sum(lg.filter(l => l.date < s), eggDelta);
   const n = t => sum(wk.filter(l => l.type === t), l => l.n), L = n('laid'), T = n('take'), Z = n('zusatz'), V = n('sale');
   const r = (label, v) => `<div class="row" style="margin-top:4px"><span>${label}</span><strong>${v}</strong></div>`;
-  return `<details class="info"><summary>ⓘ Wie kommen die ${stock()} zustande?</summary>
-    ${r('Übertrag aus Vorwochen', carry)}${r('+ diese Woche gelegt', L)}${r('− von Familien genommen', T)}${Z ? r('− Zusatz-Eier (bezahlt)', Z) : ''}${r('− an Nachbarn verkauft', V)}
+  const last = carryFixes().filter(l => l.date < s).slice(-1)[0], fixedNow = last && last.date === carryDate(m);
+  return `<details class="info" ${fixedNow ? 'open' : ''}><summary>ⓘ Wie kommen die ${stock()} zustande?</summary>
+    <div class="row" style="margin-top:4px"><span>Übertrag aus Vorwochen</span><span style="display:flex;align-items:center;gap:6px"><strong>${carry}</strong><button class="ghost small" onclick="sheetCarry()" aria-label="Übertrag korrigieren" title="Übertrag korrigieren">✎</button></span></div>
+    ${fixedNow ? `<p class="muted" style="margin:0 0 2px;font-size:14px">Übertrag manuell korrigiert (zuletzt ${whenFix(last)})</p>` : ''}${r('+ diese Woche gelegt', L)}${r('− von Familien genommen', T)}${Z ? r('− Zusatz-Eier (bezahlt)', Z) : ''}${r('− an Nachbarn verkauft', V)}
     <div class="row" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--line)"><span>= im Vorrat</span><strong>${carry + L - T - Z - V}</strong></div></details>`;
+}
+/* ---- Übertrag korrigieren (jede Familie darf, steht im Verlauf) ----
+   Gespeichert als egg_log-Eintrag type 'korrektur' am Sonntag vor der laufenden Woche, n = Differenz (mit Vorzeichen),
+   prev = Übertrag vorher, note = Grund. So rechnen Vorrat, Überschuss (DB app.hens_surplus) und Bestellungen mit dem neuen Wert. */
+const carryFixes = () => P().log.filter(l => l.type === 'korrektur');
+function carryDate(m){ const d = new Date(m); d.setDate(d.getDate() - 1); return ds(d); }
+function carryNow(){
+  const s = ds(monday(new Date()));
+  return sum(P().log.filter(l => isLive(l.date) && l.date < s), eggDelta);
+}
+function whenFix(l){
+  const t = l.at ? new Date(l.at) : null, f = famByUid(l.by);
+  return [t ? `${fmtDay(t)}, ${t.toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'})} Uhr` : '', f ? f.name : ''].filter(Boolean).join(' · ');
+}
+function sheetCarry(){
+  const c = carryNow();
+  openSheet('Übertrag korrigieren', `<p class="muted" style="margin:0">Der Übertrag sind die Eier, die aus den Vorwochen noch da sein sollten. Stimmt er nicht (etwa weil Eier nicht an die nächste Dienst-Familie weitergegeben wurden), trag hier ein, wie viele wirklich da waren.</p>
+    <div class="row" style="margin-top:10px"><span>Bisher berechnet</span><strong>${c}</strong></div>
+    <label>Richtiger Übertrag</label>${stepper('cn', Math.max(0, c), 0)}
+    <label>Grund</label><textarea id="cg" rows="2" oninput="carryReady()"></textarea>
+    <p class="muted" style="margin:6px 0 0">Die Änderung steht mit Name, Uhrzeit und Grund im <b>Verlauf</b> (Filter <b>Korrekturen</b>). Vorrat und freie Eier für Bestellungen rechnen sofort mit dem neuen Wert.</p>
+    <div class="actions"><button class="alt" onclick="closeSheet()">Abbrechen</button><button class="yolk" id="cok" onclick="doCarry()" disabled>Speichern</button></div>`);
+}
+function carryReady(){ const b = document.getElementById('cok'); if(b) b.disabled = !String(val('cg')).trim(); }
+async function doCarry(){
+  const note = String(val('cg')).trim(), want = Math.max(0, Math.floor(num(val('cn')))), cur = carryNow(), diff = want - cur;
+  if(!note){ toast('Bitte einen Grund angeben.'); return; }
+  if(!diff){ toast('Der Übertrag ist schon ' + cur + '.'); return; }
+  const p = P(), d = carryDate(monday(new Date()));
+  if(p.live && d < p.live){ toast('Vor dem Live-Start gibt es keinen Übertrag.'); return; }
+  closeSheet();
+  run(async () => ok(await sb.from('egg_log').insert({project_id:p.id, date:d, type:'korrektur', n:diff, note, prev:cur})),
+    `Übertrag ${cur} → ${want} gespeichert`);
 }
 // Kopf der Wochenkarte mit Blättern (◀ frühere Woche, ▶ zurück Richtung heute)
 function weekHead(m, title){
@@ -888,7 +1004,7 @@ function internPrice(){
 function surplusParts(m){
   const p = P(), q = quota(), s = ds(m), e = new Date(m); e.setDate(e.getDate() + 6); const es = ds(e), w = weekStats(m);
   const reserved = 0;   // seit 03.11.2026 wird nichts mehr für die Familien zurückgelegt: alles im Vorrat ist verkäuflich
-  const carry = Math.max(0, sum(p.log.filter(l => isLive(l.date) && l.date < s), l => l.type==='laid' ? l.n : l.type==='verzicht' ? 0 : -l.n));
+  const carry = Math.max(0, sum(p.log.filter(l => isLive(l.date) && l.date < s), eggDelta));
   const inW = p.log.filter(l => isLive(l.date) && l.date >= s && l.date <= es);
   const L = sum(inW.filter(l => l.type==='laid'), l => l.n), T = sum(inW.filter(l => l.type==='take'), l => l.n), V = sum(inW.filter(l => l.type==='sale' || l.type==='zusatz'), l => l.n);
   const total = Math.max(0, carry + L - T - V), oldRem = Math.max(0, carry - V), newRem = L - T - Math.max(0, V - carry);
@@ -941,6 +1057,7 @@ function logMeta(l, withDate){
   return parts.join(' · ');
 }
 function logText(l){
+  if(l.type==='korrektur') return `Übertrag korrigiert: ${l.prev ?? '?'} → ${l.prev == null ? (l.n > 0 ? '+' : '') + l.n : l.prev + l.n}${l.note ? `<div class="muted" style="font-size:14px">Grund: ${esc(l.note)}</div>` : ''}`;
   if(l.type==='verzicht') return `${esc(fam(l.fam).name)} verzichtet auf ${l.n} Ei${l.n===1?'':'er'} (diese Woche)`;
   if(l.type==='zusatz') return `${esc(fam(l.fam).name)} nimmt ${l.n} Zusatz-Ei${l.n===1?'':'er'} · ${eur(l.n*l.price)}`;
   if(l.type==='laid') return `${l.n} Ei${l.n===1?'':'er'} gelegt`;
@@ -964,9 +1081,13 @@ function sheetTake(fid, n, d0){
   openSheet(d0 ? 'Entnahme nachtragen' : 'Eier entnehmen', `<label>Wer nimmt Eier?</label><select id="f">${famOptions(fid)}</select>
     <label>Anzahl</label>${stepper('n', n||6, 1)}
     <label>Datum</label><input id="d" type="date" value="${d0||today()}" min="${takeMin()}" max="${today()}">
-    <p class="muted" style="margin:6px 0 0">Die ersten ${quota()} Eier pro Woche sind frei, für weitere zahlt die Familie den internen Preis. Für die Vorwoche wähle ein Datum aus dieser Woche.</p>` + actions('doTake()'));
+    <p class="muted" style="margin:6px 0 0">Die ersten ${quota()} Eier pro Woche sind frei, für weitere zahlt die Familie den internen Preis. Für die Vorwoche wähle ein Datum aus dieser Woche.</p>
+    <div class="note-warn">⚠ Nur eintragen, wenn die Eier wirklich schon übergeben wurden. Eingetragene Eier fehlen sofort im Vorrat und können offene Bestellungen blockieren.</div>
+    <label class="tick"><input type="checkbox" id="tk" onchange="document.getElementById('tok').disabled=!this.checked"> Die Eier wurden schon ausgeteilt</label>
+    <div class="actions"><button class="alt" onclick="closeSheet()">Abbrechen</button><button class="yolk" id="tok" onclick="doTake()" disabled>Speichern</button></div>`);
 }
 async function doTake(){
+  const tk = document.getElementById('tk'); if(tk && !tk.checked){ toast('Bitte bestätigen, dass die Eier schon ausgeteilt wurden.'); return; }
   const n=Math.floor(num(val('n'))), date = val('d') || today(), f = val('f'); if(n<1) return;
   if(date > today() || date < takeMin()){ toast(`Datum geht nur von ${fmtDay(parseD(takeMin()))} bis heute.`); return; }
   if(date === today() && n>stock() && !(await ask(`Im Vorrat sind nur ${stock()} Eier. Möchtest du trotzdem ${n} eintragen?`, {title:'Nicht genug Eier im Vorrat', ok:'Trotzdem eintragen'}))) return;
@@ -1353,7 +1474,7 @@ function sheetDay(s){
     ${evs.map(e=>`<div class="item"><div><strong>${esc(e.title)}</strong> <span class="pill">${esc(e.kind)}</span>${e.fam?`<div class="muted">${esc(fam(e.fam).name)}</div>`:''}</div>
       ${canEditEvent(e)?`<button class="alt small" onclick="sheetEvent('${e.id}')">Ändern</button>`:''}</div>`).join('')}
     ${isHens() ? logs.map(l=>`<div class="item"><div>${logText(l)}${logMeta(l,false)?`<div class="muted" style="font-size:14px">${logMeta(l,false)}</div>`:''}</div>
-      ${can?`<div style="display:flex;gap:4px"><button class="alt small" onclick="sheetEditLog('${l.id}')">Ändern</button><button class="ghost" onclick="delLogDay('${l.id}','${s}')" aria-label="Löschen">✕</button></div>`:lock}</div>`).join('') : ''}
+      ${can?`<div style="display:flex;gap:4px">${l.type==='korrektur'?'':`<button class="alt small" onclick="sheetEditLog('${l.id}')">Ändern</button>`}<button class="ghost" onclick="delLogDay('${l.id}','${s}')" aria-label="Löschen">✕</button></div>`:lock}</div>`).join('') : ''}
     ${txs.map(t=>`<div class="item"><div>${esc(t.desc||t.kind)}<div class="muted">${txMeta(t)} · ${txAmt(t)}</div></div>
       ${!can ? lock : linked(t.id) ? '<span class="muted" style="font-size:14px">über Eier-Eintrag ändern</span>'
         : (t.kind==='einzahlung'||t.kind==='auszahlung') ? `<button class="ghost" onclick="delTxDay('${t.id}','${s}')" aria-label="Löschen">✕</button>`
@@ -2417,9 +2538,12 @@ function manualCard(){
         <li>Tippe aufs <b>große Ei</b>: Jedes Tippen zählt ein Ei mehr für heute und wird mit deinem Namen und der Uhrzeit im Verlauf festgehalten. Mit <b>−1 korrigieren</b> nimmst du das zuletzt gezählte Ei zurück.</li>
         <li><b>Jede Familie</b> darf zählen, auch ohne Dienst. Zählt oder verkauft eine Familie, die diese Woche keinen Dienst hat, zeigt die App einmal pro Tag ein kleines Fenster „Familie X hat Dienst“ und fragt, ob du trotzdem zählen möchtest. Es bleibt erlaubt, ihr merkt es nur.</li>
         <li>Rechts unter dem Ei steht, wie viele Eier <b>diese Woche</b> gelegt wurden. Links oben siehst du, wer <b>diese Woche Dienst</b> hat. Ein gelber Rahmen heißt: deine Familie.</li>
-        <li>Vergessen? Tippe unter „Vorrat &amp; Verkauf“ auf <b>Eier nachtragen</b> und wähle Datum und Anzahl.</li></ul>`),
+        <li>Vergessen? Tippe unter „Vorrat &amp; Verkauf“ auf <b>Eier nachtragen</b> und wähle Datum und Anzahl.</li>
+        <li>Der <b>Verlauf</b> (unten im Tab Eier, aufklappen) fasst jeden Tag in einer Zeile zusammen. Tippe auf den Tag, um die einzelnen Einträge zu sehen und mit ✕ zu löschen. Oben wählst du den Zeitraum (<b>7 Tage</b>, <b>30 Tage</b>, <b>Alles</b>) und die Art (<b>Gelegt</b>, <b>Genommen</b>, <b>Verkäufe</b>, <b>Korrekturen</b>). Mit <b>Ältere Tage laden</b> schaust du weiter zurück.</li></ul>`),
       manDet('vorrat', 'Vorrat, Verkauf und Zusatz-Eier', `<ul>
         <li><b>Vorrat</b> sind die gelegten Eier abzüglich der genommenen und verkauften (gezählt ab Live-Start).</li>
+        <li>Stimmt der <b>Übertrag aus Vorwochen</b> nicht (etwa weil Eier nicht an die nächste Dienst-Familie weitergegeben wurden)? Klappe „Wie kommen die … zustande?“ auf und tippe auf den Stift ✎ neben dem Übertrag. Gib den richtigen Wert und einen <b>Grund</b> ein. Jede Familie darf das. Die Änderung steht mit Name, Uhrzeit, altem und neuem Wert im Verlauf unter <b>Korrekturen</b>.</li>
+        <li><b>Entnehmen</b> erst eintragen, wenn die Eier wirklich übergeben sind, und das Häkchen <b>Die Eier wurden schon ausgeteilt</b> setzen. Eingetragene Eier fehlen sofort im Vorrat und können Bestellungen von Nachbarn blockieren.</li>
         <li><b>zum Verkauf</b> ist der ganze Vorrat: Es wird nichts mehr für die Familien zurückgelegt, wer zuerst kommt, bekommt die Eier. Nicht Verkauftes bleibt als <b>Übertrag</b> im Vorrat. Die älteren Eier verkauft ihr zuerst.</li>
         <li>Die <b>Prognose bis Sonntag</b> unter dem Vorrat ist nur eine Schätzung aus den letzten 14 Tagen. Sie zeigt, ob die Eier voraussichtlich für die freien Eier der Familien und die bestellten Eier reichen. Sie sperrt nichts.</li>
         <li><b>Bezahlte Eier einer Familie</b> (über die freien Eier hinaus) trägst du mit <b>Entnehmen</b> ein, die App öffnet dann die Bezahlung. Eine Familie zahlt dabei den internen Preis. Der Betrag geht in die Gemeinschaftskasse. Wähle, ob <b>Bar</b> oder per <b>PayPal</b> bezahlt wird. Danach erscheint die Bezahlung: Mit <b>PayPal öffnen</b> zahlt die Familie den Betrag ein, mit <b>Später</b> schließt ihr das Fenster. Der Eingang wird in der Kasse kontrolliert (siehe „Zahlungen kontrollieren“).</li>
