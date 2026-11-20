@@ -913,7 +913,7 @@ function stockCalc(m){
   const n = t => sum(wk.filter(l => l.type === t), l => l.n), L = n('laid'), T = n('take'), Z = n('zusatz'), V = n('sale');
   const r = (label, v) => `<div class="row" style="margin-top:4px"><span>${label}</span><strong>${v}</strong></div>`;
   const last = carryFixes().filter(l => l.date < s).slice(-1)[0], fixedNow = last && last.date === carryDate(m);
-  return `<details class="info calc" ${fixedNow ? 'open' : ''}><summary>Wie kommen die ${stock()} zustande?</summary>
+  return `<details class="info calc"><summary>Wie kommen die ${stock()} zustande?</summary>
     <div class="row" style="margin-top:8px;align-items:center"><span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">Übertrag aus Vorwochen<button class="yolkline small" onclick="sheetCarry()" aria-label="Übertrag ändern">✎ Ändern</button></span><strong>${carry}</strong></div>
     ${fixedNow ? `<p class="muted" style="margin:0 0 2px;font-size:14px">Übertrag manuell korrigiert (zuletzt ${whenFix(last)})</p>` : ''}${r('+ diese Woche gelegt', L)}${r('− von Familien genommen', T)}${Z ? r('− Zusatz-Eier (bezahlt)', Z) : ''}${r('− an Nachbarn verkauft', V)}
     <div class="row" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--line)"><span>= im Vorrat</span><strong>${carry + L - T - Z - V}</strong></div></details>`;
