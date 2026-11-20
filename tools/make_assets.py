@@ -94,6 +94,8 @@ def icon(size):
     draw_egg(im, s*0.5, s*0.46, s*0.215, s*0.285, shadow=True)
     return im.convert('RGB').resize((size,size), Image.LANCZOS)
 
+icon(300).save('bezahlen.png', optimize=True)   # kleines Vorschaubild fuer /bezahlen (WhatsApp zeigt kleine Karte)
+
 for n, sz in [('icon-512.png',512),('icon-192.png',192),('apple-touch-icon.png',180),('favicon-32.png',32)]:
     icon(sz).save(n, optimize=True)
 

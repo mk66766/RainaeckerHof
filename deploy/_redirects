@@ -1,1 +1,3 @@
 /nachbarn  /nachbarn.html  200
+/bezahlen    /bezahlen.html  200
+/bezahlen/*  /bezahlen.html  200
