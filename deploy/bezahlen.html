@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rainäcker Hof – bezahlen</title>
+<meta name="description" content="Eier bequem per PayPal bezahlen">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#263829">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rainäcker Hof">
+<meta property="og:title" content="Rainäcker Hof – bezahlen">
+<meta property="og:description" content="Eier bequem per PayPal bezahlen">
+<meta property="og:url" content="https://rainaecker-hof-rtti.netlify.app/bezahlen">
+<meta property="og:locale" content="de_DE">
+<meta property="og:image" content="https://rainaecker-hof-rtti.netlify.app/bezahlen.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="300">
+<meta property="og:image:height" content="300">
+<meta property="og:image:alt" content="Goldenes Ei, Symbol des Rainäcker Hofs">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Rainäcker Hof – bezahlen">
+<meta name="twitter:description" content="Eier bequem per PayPal bezahlen">
+<meta name="twitter:image" content="https://rainaecker-hof-rtti.netlify.app/bezahlen.png">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<script>
+/* Weiterleitung zu PayPal.me. Aufbau des Links:
+   /bezahlen                -> paypal.me/RainaeckerHuehner
+   /bezahlen/4.50           -> paypal.me/RainaeckerHuehner/4.50EUR
+   /bezahlen/4.50?an=Name   -> paypal.me/Name/4.50EUR (anderes Konto, z. B. Ziegen)
+   Nur geprüfte Werte, damit die Seite nicht beliebig weiterleitet.
+   Bewusst kein <meta http-equiv="refresh">: WhatsApp soll die Vorschau dieser Seite zeigen, nicht die von PayPal. */
+var PP_DEFAULT = 'RainaeckerHuehner';
+var ppTarget = (function(){
+  var an = new URLSearchParams(location.search).get('an') || '';
+  var name = /^[A-Za-z0-9._-]{1,40}$/.test(an) ? an : PP_DEFAULT;
+  var m = location.pathname.match(/^\/bezahlen(?:\.html)?\/(\d{1,4}(?:[.,]\d{1,2})?)\/?$/);
+  var amount = m ? parseFloat(m[1].replace(',', '.')) : 0;
+  return 'https://paypal.me/' + name + (amount > 0 ? '/' + amount.toFixed(2) + 'EUR' : '');
+})();
+location.replace(ppTarget);
+</script>
+<style>
+:root{ color-scheme: light; --bg:#EDF1E8; --surface:#FFFFFF; --ink:#1E2A22; --muted:#66746B; --line:#D5DDCF; --yolk:#F4B400; --yolk-ink:#2B2000; }
+@media (prefers-color-scheme: dark){ :root{ color-scheme: dark; --bg:#16201A; --surface:#1F2B23; --ink:#EEF2EA; --muted:#A9B8AD; --line:#33443A; } }
+*{ box-sizing:border-box; }
+body{ margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:16px; background:var(--bg); color:var(--ink); font:16px/1.5 system-ui,-apple-system,'Segoe UI',sans-serif; }
+.card{ width:100%; max-width:380px; background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:24px 20px; text-align:center; }
+.card img{ width:72px; height:72px; border-radius:16px; }
+h1{ font-size:22px; margin:12px 0 4px; }
+p{ margin:0 0 16px; color:var(--muted); }
+a.btn{ display:block; padding:14px; border-radius:12px; background:var(--yolk); color:var(--yolk-ink); font-weight:700; text-decoration:none; }
+</style>
+</head>
+<body>
+<main class="card">
+  <img src="/bezahlen.png" alt="">
+  <h1>Rainäcker Hof</h1>
+  <p>Du wirst zu PayPal weitergeleitet …</p>
+  <a class="btn" id="go" href="https://paypal.me/RainaeckerHuehner">Weiter zu PayPal</a>
+</main>
+<script>document.getElementById('go').href = ppTarget;</script>
+</body>
+</html>

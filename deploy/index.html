@@ -2005,6 +2005,9 @@ function normPaypal(v){
     .split(/[\/?#\s]/)[0].replace(/[^A-Za-z0-9._-]/g,'');
 }
 const paypalLink = (name, amount) => amount > 0 ? `https://paypal.me/${name}/${amount.toFixed(2)}EUR` : `https://paypal.me/${name}`;
+/* Kurzer Link auf die eigene Seite /bezahlen (leitet zu PayPal.me weiter), damit WhatsApp eine kleine Hof-Vorschau statt des großen PayPal-Logos zeigt */
+const PP_DEFAULT = 'RainaeckerHuehner';                // gleicher Standard wie in bezahlen.html
+const payShortLink = (name, amount) => `${CONFIG.site}/bezahlen${amount > 0 ? '/' + amount.toFixed(2) : ''}${name && name !== PP_DEFAULT ? '?an=' + encodeURIComponent(name) : ''}`;
 function qrMatrix(text){
   const q = qrcode(0, 'M'); q.addData(text); q.make();
   const n = q.getModuleCount(), rows = [];
@@ -2022,7 +2025,7 @@ function payMessage(x){
   const betrag = x.amount > 0 ? ` (${eur(x.amount)})` : '';
   const name = (x.buyer || '').trim();
   const anrede = !name ? 'Hallo!' : /^familie\s/i.test(name) ? `Hallo ${name}!` : `Hallo Familie ${name}!`;
-  return `${anrede} ${tier}\n${dank}\n\nDu kannst ganz bequem per PayPal bezahlen${betrag}:\n👉 ${x.link}\n\nLiebe Grüße vom Rainäcker Hof 💛`;
+  return `${anrede} ${tier}\n${dank}\n\nDu kannst ganz bequem per PayPal bezahlen${betrag}:\n👉 ${payShortLink(x.name, x.amount)}\n\nLiebe Grüße vom Rainäcker Hof 💛`;
 }
 function sheetPay(o){
   if(!P().paypal && !S.admin){ toast('Der Admin muss zuerst den PayPal.me-Namen eintragen'); return; }
