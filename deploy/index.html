@@ -196,6 +196,8 @@ details.info.calc>summary{display:inline-flex;align-items:center;gap:6px;padding
 details.info.calc>summary::after{content:'›';font-size:20px;line-height:1;transform:rotate(90deg);transition:transform .15s}
 details.info.calc[open]>summary::after{transform:rotate(-90deg)}
 button.yolkline{background:color-mix(in srgb, var(--yolk) 18%, transparent);color:var(--ink);border:2px solid var(--yolk)}
+.stockline{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--line);font-size:15px}
+.stockline.bad{border:1.5px solid var(--bad);color:var(--bad);font-weight:500}
 .note-warn{margin-top:12px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb, var(--yolk) 28%, transparent);border:1.5px solid var(--yolk);color:var(--ink);font-size:14px;font-weight:500}
 label.tick{display:flex;align-items:center;gap:10px;font-weight:600;margin-top:12px;cursor:pointer}
 label.tick input{width:22px;height:22px;flex:none;margin:0;accent-color:var(--yolk)}
@@ -899,6 +901,7 @@ function weekCard(){
       <div class="row" style="margin-top:6px"><span>Preis extern (Nachbarn)</span><strong>${eur(p.price)}</strong></div>
     </div>
     <button class="yolk" style="width:100%;margin-top:12px" onclick="sheetSale()" ${avail<1?'disabled':''}>An Nachbarn verkaufen</button>
+    ${avail<1 ? `<button class="ghost" style="margin-top:6px" onclick="sheetSale(null,null,null,true)">Eier aus Familienbestand verkaufen</button>` : ''}
     <button class="ghost" style="margin-top:6px" onclick="sheetLaid()">Eier nachtragen</button>
     ${info(`Alle Eier im Vorrat sind verkäuflich, wer zuerst kommt. Familien nehmen die ersten ${q} Eier pro Woche kostenlos, jedes weitere kostet den internen Preis. Die Prognose schätzt aus den letzten 14 Tagen, ob die Eier bis Sonntag reichen. Alle Einnahmen gehen in die Gemeinschaftskasse.`, 'So läuft es')}
   </div>
@@ -1127,7 +1130,9 @@ async function doTake(){
     .then(done => { if(!done) return; if(nPaid > 0) pay(); else toastUndo(`${fam(f).name}: ${eggs(nFree)} entnommen${when}`, async () => ok(await sb.from('egg_log').delete().eq('id', id))); });
 }
 let saleGiven = false;   // Verkauf direkt nach „Aus meinem Anspruch abgeben“: ohne Dienst-Rückfrage
-function sheetSale(oid, seller, n){
+/* own = „Eier aus Familienbestand verkaufen“: Die Eier wurden früher entnommen (etwa in einer Vorwoche) und liegen nicht mehr im Vorrat.
+   Dann bucht doSale zusätzlich eine Übertrag-Korrektur +n (wie sheetCarry), damit der Vorrat sie nicht doppelt abzieht. */
+function sheetSale(oid, seller, n, own){
   const o = oid ? (P().orders || []).find(x => x.id === oid) : null;
   saleFor = o ? o.id : null; payPick = 'bar'; saleGiven = !!seller;
   const qty = n || (o ? o.qty : 10);
@@ -1135,10 +1140,40 @@ function sheetSale(oid, seller, n){
     <label>Käufer (z. B. Nachbar Meier)</label><input id="b" type="text" placeholder="Name" value="${o?esc(o.buyer):''}">
     <label>Anzahl</label>${stepper('n', qty, 1, undefined, ' oninput="saleCalc()"')}
     <label>Preis pro Ei, extern (€)</label><input id="p" type="text" inputmode="decimal" value="${String(P().price).replace('.',',')}" oninput="saleCalc()">
-    <label>Verkauft von</label><select id="sv">${famOptions(seller || S.me)}</select>
+    <label>Verkauft von</label><select id="sv" onchange="saleStockLine()">${famOptions(seller || S.me)}</select>
+    <label class="tick"><input type="checkbox" id="own" ${own ? 'checked' : ''} onchange="saleStockLine()"> Eier aus Familienbestand verkaufen</label>
+    <p class="muted" id="ownx" style="margin:4px 0 0;font-size:14px" ${own ? '' : 'hidden'}>Für Eier, die die Familie schon früher entnommen hat (etwa in einer Vorwoche). Sie kommen über den Übertrag zurück in den Vorrat und werden nicht doppelt abgezogen.</p>
+    <div class="note-warn" id="ownd" ${own ? '' : 'hidden'}>💛 Die Familie verzichtet auf diese Eier. Der Erlös geht als <b>Spende</b> in die Gemeinschaftskasse.</div>
+    <div class="stockline" id="sl"></div>
     <label>Wie wird bezahlt?</label>${pmSeg('bar')}
     <div id="recv"><label>Erhalten (€), mehr als der Preis zählt als Trinkgeld</label><input id="rc" type="text" inputmode="decimal" value="${money(qty * P().price)}" oninput="this.dataset.touched=1"></div>` + actions('doSale()'));
-  setPm('bar');
+  setPm('bar'); saleStockLine();
+}
+/* Wie viele Eier hat eine Familie in den letzten 4 Wochen entnommen und noch nicht als „schon bei der Familie“ verkauft?
+   Nur dann darf der Haken gesetzt werden (Schutz gegen einen zu hohen Vorrat). */
+const OWN_DAYS = 28;
+function ownLeft(fid){
+  const d = new Date(); d.setDate(d.getDate() - OWN_DAYS); const from = ds(d), name = fam(fid).name, lg = P().log.filter(l => l.date >= from);
+  const taken = sum(lg.filter(l => l.type === 'take' && l.fam === fid), l => l.n);
+  const sold = sum(lg.filter(l => l.type === 'korrektur' && l.n > 0 && String(l.note || '').includes(` aus dem Bestand von ${name} an `)), l => l.n);
+  return Math.max(0, taken - sold);
+}
+// Zeile im Verkaufsfenster: was mit dem Vorrat passiert (mit oder ohne Haken)
+function saleStockLine(){
+  const el = document.getElementById('sl'), ownEl = document.getElementById('own'); if(!el || !ownEl) return;
+  const n = Math.max(0, Math.floor(num(val('n')))), own = ownEl.checked, st = stock(), f = val('sv'), left = f ? ownLeft(f) : 0;
+  ['ownd', 'ownx'].forEach(id => { const b = document.getElementById(id); if(b) b.hidden = !own; });
+  const eggs = k => `${k} Ei${k===1?'':'er'}`;
+  if(own && n > left){
+    el.className = 'stockline bad';
+    el.innerHTML = `✋ ${esc(fam(f).name)} hat in den letzten 4 Wochen ${left ? `nur ${eggs(left)}` : 'keine Eier'} entnommen${left ? ', die noch nicht so verkauft wurden' : ''}. Mit Haken lassen sich höchstens so viele verkaufen. Sonst Haken entfernen: Dann gehen die Eier vom Vorrat ab.`;
+  } else if(own){
+    el.className = 'stockline';
+    el.innerHTML = `🥚 Vorrat bleibt bei <b>${st}</b> Eiern (die Eier kommen von ${esc(fam(f).name)}).`;
+  } else {
+    el.className = 'stockline' + (n > st ? ' bad' : '');
+    el.innerHTML = `🥚 Aus dem Vorrat: jetzt <b>${st}</b> → danach <b>${st - n}</b> Eier`;
+  }
 }
 async function doSale(){
   const n=Math.floor(num(val('n'))), pr=num(val('p')); if(n<1||pr<0) return;
@@ -1149,12 +1184,17 @@ async function doSale(){
     return;
   }
   const tip = Math.round((received - expected)*100)/100;
-  if(n>stock() && !(await ask(`Im Vorrat sind nur ${stock()} Eier. Möchtest du trotzdem ${n} eintragen?`, {title:'Nicht genug Eier im Vorrat', ok:'Trotzdem eintragen'}))) return;
-  if(!saleGiven && !(await dutyCheck(today(), 'verkaufen'))) return;
+  const ownEl = document.getElementById('own'), own = !!(ownEl && ownEl.checked), fixDate = carryDate(monday(new Date()));
+  if(own && n > ownLeft(val('sv'))){ toast('Die Familie hat nicht so viele Eier entnommen. Haken entfernen oder Anzahl verringern.'); return; }
+  if(own && P().live && fixDate < P().live){ toast('Vor dem Live-Start gibt es keinen Übertrag.'); return; }
+  if(!own && n>stock() && !(await ask(`Im Vorrat sind nur ${stock()} Eier. Möchtest du trotzdem ${n} eintragen?`, {title:'Nicht genug Eier im Vorrat', ok:'Trotzdem eintragen'}))) return;
+  if(!saleGiven && !own && !(await dutyCheck(today(), 'verkaufen'))) return;
   const svEl = document.getElementById('sv'), sellerId = (svEl && val('sv')) || S.me || null;
-  const p = P(), buyer = val('b').trim(), txId = uid(), eggId = uid(), oid = saleFor; saleFor = null; closeSheet();
+  const p = P(), buyer = val('b').trim(), txId = uid(), eggId = uid(), fixId = uid(), oid = saleFor; saleFor = null; closeSheet();
+  const fixNote = `${n} Ei${n===1?'':'er'} aus dem Bestand von ${sellerId ? fam(sellerId).name : 'einer Familie'} an ${buyer||'Nachbar'} verkauft`;
   run(async () => {
-    await ok(await sb.from('transactions').insert({id:txId, project_id:p.id, date:today(), kind:'einnahme', amount:expected, description:`${n} Eier an ${buyer||'Nachbar'}`, family_id:null, seller_id:sellerId, pay_method:method, pay_state: method === 'bar' ? 'bar_offen' : 'pruefen'}));
+    if(own) await ok(await sb.from('egg_log').insert({id:fixId, project_id:p.id, date:fixDate, type:'korrektur', n, note:fixNote, prev:carryNow()}));
+    await ok(await sb.from('transactions').insert({id:txId, project_id:p.id, date:today(), kind:'einnahme', amount:expected, description: own ? `Spende / Erlös aus Familienbestand (${sellerId ? fam(sellerId).name : 'Familie'}): ${n} Eier an ${buyer||'Nachbar'}` : `${n} Eier an ${buyer||'Nachbar'}`, family_id:null, seller_id:sellerId, pay_method:method, pay_state: method === 'bar' ? 'bar_offen' : 'pruefen'}));
     await ok(await sb.from('egg_log').insert({id:eggId, project_id:p.id, date:today(), type:'sale', n, price:pr, buyer:buyer||null, family_id:null, tx_id:txId}));
     if(tip > 0) await ok(await sb.from('transactions').insert({project_id:p.id, date:today(), kind:'einnahme', amount:tip, description:`Trinkgeld ${buyer||'Nachbar'}`, family_id:null, parent_id:txId}));
     if(oid) await ok(await sb.from('egg_orders').update({status:'erledigt', handled_at:new Date().toISOString(), handled_by:S.user.id}).eq('id', oid));
@@ -1164,6 +1204,7 @@ async function doSale(){
     toastUndo(`${n} Ei${n===1?'':'er'} an ${buyer || 'Nachbar'} verkauft`, async () => {
       await ok(await sb.from('egg_log').delete().eq('id', eggId));
       await ok(await sb.from('transactions').delete().eq('id', txId));            // Trinkgeld hängt am Verkauf und geht mit
+      if(own) await ok(await sb.from('egg_log').delete().eq('id', fixId));
       if(oid) await ok(await sb.from('egg_orders').update({status:'offen', handled_at:null, handled_by:null}).eq('id', oid));
     });
   });
@@ -1942,6 +1983,7 @@ function setPm(m){
 }
 const pmSeg = def => `<div class="seg"><button id="pm1" class="${def==='bar'?'on':''}" onclick="setPm('bar')">Bar</button><button id="pm2" class="${def==='paypal'?'on':''}" onclick="setPm('paypal')">PayPal</button></div><p id="pmhint" class="muted" style="margin:8px 0 0"></p>`;
 function saleCalc(){
+  saleStockLine();
   const rc = document.getElementById('rc'); if(!rc || rc.dataset.touched) return;
   rc.value = money(Math.floor(num(val('n'))) * num(val('p')));
 }
@@ -2574,7 +2616,7 @@ function manualCard(){
         <li><b>zum Verkauf</b> ist der ganze Vorrat: Es wird nichts mehr für die Familien zurückgelegt, wer zuerst kommt, bekommt die Eier. Nicht Verkauftes bleibt als <b>Übertrag</b> im Vorrat. Die älteren Eier verkauft ihr zuerst.</li>
         <li>Die <b>Prognose bis Sonntag</b> unter dem Vorrat ist nur eine Schätzung aus den letzten 14 Tagen. Sie zeigt, ob die Eier voraussichtlich für die freien Eier der Familien und die bestellten Eier reichen. Sie sperrt nichts.</li>
         <li><b>Bezahlte Eier einer Familie</b> (über die freien Eier hinaus) trägst du mit <b>Entnehmen</b> ein, die App öffnet dann die Bezahlung. Eine Familie zahlt dabei den internen Preis. Der Betrag geht in die Gemeinschaftskasse. Wähle, ob <b>Bar</b> oder per <b>PayPal</b> bezahlt wird. Danach erscheint die Bezahlung: Mit <b>PayPal öffnen</b> zahlt die Familie den Betrag ein, mit <b>Später</b> schließt ihr das Fenster. Der Eingang wird in der Kasse kontrolliert (siehe „Zahlungen kontrollieren“).</li>
-        <li><b>An Nachbarn verkaufen:</b> Käufer, Anzahl und externer Preis eintragen, dazu <b>Verkauft von</b> (welche Familie verkauft) und ob <b>Bar</b> oder per <b>PayPal</b> bezahlt wird. Das Geld geht in die Gemeinschaftskasse. Danach erscheint die PayPal-Bezahlung mit QR-Code: Der Nachbar kann scannen oder den Link per <b>Per WhatsApp senden</b> bekommen. Hast du Bargeld erhalten, zahlst du es mit <b>PayPal öffnen</b> in die Gemeinschaftskasse ein.</li>
+        <li><b>An Nachbarn verkaufen:</b> Käufer, Anzahl und externer Preis eintragen, dazu <b>Verkauft von</b> (welche Familie verkauft) und ob <b>Bar</b> oder per <b>PayPal</b> bezahlt wird. Das Geld geht in die Gemeinschaftskasse. Danach erscheint die PayPal-Bezahlung mit QR-Code: Der Nachbar kann scannen oder den Link per <b>Per WhatsApp senden</b> bekommen. Hast du Bargeld erhalten, zahlst du es mit <b>PayPal öffnen</b> in die Gemeinschaftskasse ein. Verkauft eine Familie Eier, die sie schon früher entnommen hat (etwa aus einer Vorwoche), setze den Haken <b>Eier aus Familienbestand verkaufen</b>: Die App bucht dann den Übertrag um diese Eier hoch (steht im <b>Verlauf</b> unter <b>Korrekturen</b>), damit sie nicht doppelt vom Vorrat abgehen. Die Familie verzichtet damit auf diese Eier: Der Erlös ist eine <b>Spende</b> an die Gemeinschaftskasse und steht in den Buchungen als „Spende / Erlös aus Familienbestand“, ein Guthaben für die Familie entsteht nicht. Ist der Vorrat leer, gibt es dafür den Knopf <b>Eier aus Familienbestand verkaufen</b>.</li>
         <li>Ist nichts im Vorrat, sind beide Knöpfe gesperrt.</li></ul>`),
       manDet('bestell', 'Bestellungen von Nachbarn', `<ul>
         <li>Auf der Nachbar-Seite (Link aus dem Tab <b>Hof</b>) können Nachbarn <b>Eier bestellen</b>. Sie tragen ihre Familie und die Stückzahl ein (bis 30). Ist gerade nicht genug frei, kommen sie auf die <b>Warteliste</b>.</li>
@@ -2623,7 +2665,7 @@ function manualCard(){
         <li><b>Zeiten ändern:</b> neue Zeiten und eine Notiz (z. B. Sommerzeit) eintragen. Alle sehen die Änderung. Mit dem Haken <b>Andere Familien benachrichtigen</b> bekommen die anderen Familien eine Benachrichtigung mit den neuen Zeiten aufs Handy. Nach rund fünf Wochen ohne Änderung erinnert dich die App.</li></ul>`),
       kalender, kasse, fehler, protokoll, adminSec,
       manDet('faq', 'Häufige Fragen', `<ul>
-        <li><i>Eine Familie gibt nachträglich Eier aus der Vorwoche ab, die verkauft werden.</i> Blättere in <b>Diese Woche</b> mit ◀ zur Vorwoche, tippe bei ihrer Entnahme auf <b>Ändern</b> und setze die Anzahl herunter (zum Beispiel von 10 auf 5). Die Eier sind dann wieder im Vorrat, und du trägst sie mit <b>An Nachbarn verkaufen</b> ein.</li>
+        <li><i>Eine Familie verkauft Eier, die sie schon früher entnommen hat (etwa aus einer Vorwoche).</i> Trag den Verkauf mit <b>An Nachbarn verkaufen</b> ein (bei leerem Vorrat mit <b>Eier aus Familienbestand verkaufen</b>), wähle die Familie bei <b>Verkauft von</b> und setze den Haken <b>Eier aus Familienbestand verkaufen</b>. Der Übertrag steigt um diese Eier, der Verkauf zieht sie wieder ab: Der Vorrat bleibt richtig. Die Familie verzichtet auf diese Eier, der Erlös geht als Spende in die Gemeinschaftskasse (Buchung „Spende / Erlös aus Familienbestand“, kein Guthaben). Die alte Entnahme bleibt stehen.</li>
         <li><i>Warum kann ich nichts verkaufen?</i> Der Vorrat ist leer. Prüfe „Vorrat &amp; Verkauf“ und ob Entnahmen oder Verkäufe fehlerhaft eingetragen sind.</li>
         <li><i>Im Winter legen die Hennen weniger.</i> Die freien ${q} Eier bleiben gleich, aber der Vorrat reicht dann nicht für alle. Die <b>Prognose bis Sonntag</b> zeigt, wie viele voraussichtlich fehlen. Ihr verteilt die Eier nach Absprache.</li>
         <li><i>Ein Nachbar fragt, ob Eier da sind.</i> Öffne den Tab <b>Hof</b>, tippe bei „Nachbar-Seite“ auf <b>Link für Nachbarn teilen</b> und schicke ihm den Link.</li>
