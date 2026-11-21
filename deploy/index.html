@@ -338,13 +338,15 @@ function ask(text, o = {}){
 }
 const lsGet = k => { try{ return localStorage.getItem(k); }catch(e){ return null; } };
 const lsSet = (k,v) => { try{ localStorage.setItem(k,v); }catch(e){} };
-/* Einklappbare Karten: offen oder zu merkt sich jedes Handy je Karte (localStorage „hof-fold“). Neue Karten starten eingeklappt. */
-const FOLD_KEY = 'hof-fold';
-let foldSt = (() => { try{ return JSON.parse(lsGet(FOLD_KEY) || '{}') || {}; }catch(e){ return {}; } })();
+/* Einklappbare Karten: Beim Öffnen der App sind alle Karten eingeklappt (seit 21.11.2026). Was man aufklappt, bleibt offen,
+   bis die App geschlossen wird oder länger als FOLD_RESET_MIN Minuten im Hintergrund war (dann wieder alles zu). Nur im Speicher. */
+const FOLD_RESET_MIN = 30;
+let foldSt = {}, hiddenAt = 0;
+try{ localStorage.removeItem('hof-fold'); }catch(e){}   // früher gemerkter Zustand
 const isOpen = k => foldSt[k] === true;
 function setFold(k, open, rerender){
   if(isOpen(k) === open) return;
-  foldSt[k] = open; lsSet(FOLD_KEY, JSON.stringify(foldSt));
+  foldSt[k] = open;
   if(rerender) render();
 }
 // Karte mit Titel, Pfeil und Kurzzeile. Ist body eine Funktion, wird der Inhalt nur bei offener Karte berechnet.
@@ -467,7 +469,12 @@ async function setProject(id){
   tab = TABS[S.p.kind][0][0]; render(); window.scrollTo(0,0);
 }
 async function refresh(){ try{ if(tab === 'admin') adm.data = null; await loadProject(); render(); toast('Aktualisiert'); }catch(e){ toast('Fehler: ' + (e.message||e)); } }
-document.addEventListener('visibilitychange', () => { if(!document.hidden && S.p) loadProject().then(render).catch(()=>{}); });
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden){ hiddenAt = Date.now(); return; }
+  if(hiddenAt && Date.now() - hiddenAt > FOLD_RESET_MIN * 60000){ foldSt = {}; weekOff = 0; audit.open = false; }   // App lange im Hintergrund: wie neu geöffnet, alles eingeklappt
+  hiddenAt = 0;
+  if(S.p) loadProject().then(render).catch(()=>{});
+});
 
 /* ================= Login ================= */
 let selLogin = null, loginMsg = '';
@@ -2512,7 +2519,7 @@ function manualCard(){
     <li>Viele Karten lassen sich mit einem Tipp auf die Überschrift auf- und zuklappen. Eingeklappt zeigen sie eine Kurzzeile (z. B. bei <b>Diese Woche</b> gelegt und genommen). Dein Handy merkt sich, welche Karten du offen oder zu hattest.</li>
     </ul>`);
   const adminSec = !S.admin ? '' : manDet('admin', 'Tab Admin (nur für den Admin)', `<ul>
-    <li>Alle Karten sind einklappbar und zeigen eingeklappt eine Kurzzeile, zum Beispiel was überfällig ist.</li>
+    <li>Alle Karten sind einklappbar und zeigen eingeklappt eine Kurzzeile, zum Beispiel was überfällig ist. Beim Öffnen der App ist alles eingeklappt, ein Tipp auf die Karte klappt sie auf.</li>
     <li><b>Offen auf einen Blick:</b> für Hühner und Ziegen die PayPal-Eingänge zum Prüfen, Bargeld bei Familien, offene Bestellungen, letzter Kassenabgleich, letzte Sicherung und bis wann der Dienstplan eingetragen ist. Rot heißt überfällig. Mit <b>↻ Neu laden</b> lädst du neu.</li>
     <li><b>Familien im Blick:</b> je Familie, wann sie zuletzt in der App war, wann sie sich zuletzt mit dem Code angemeldet hat, wann sie zuletzt etwas eingetragen hat und auf wie vielen Handys Benachrichtigungen und Erinnerungen eingeschaltet sind.</li>
     <li><b>Wer bekommt was?:</b> Tippe auf eine Familie und nimm den Haken bei einer Art von Benachrichtigung weg (neue Bestellung, offene Bestellung für die Familie mit Dienst, Dienst und Wochenrückblick, Bargeld einzahlen, Zahlung prüfen, Monatsabschluss). Das gilt sofort für alle Handys der Familie.</li>
