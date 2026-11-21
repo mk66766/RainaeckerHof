@@ -2233,6 +2233,17 @@ async function refreshPushState(){
     }
   }catch(e){ push.state = 'nicht-unterstuetzt'; }
   if(S.p && tab === 'hof') render();
+  reportDevice();
+}
+// Für die Geräteliste im Tab Admin: Home-Bildschirm ja/nein, Benachrichtigungen erlaubt, Push-Abo.
+// Keine IP, kein Standort. Ohne Datenbank-Update (report_device fehlt) passiert nichts.
+async function reportDevice(){
+  try{
+    if(!S.user) return;
+    const perm = 'Notification' in window ? Notification.permission : 'unsupported';
+    let ep = null; try{ const sub = perm === 'granted' ? await currentSub() : null; ep = sub ? sub.endpoint : null; }catch(e){}
+    await sb.rpc('report_device', {p_standalone: isStandalone(), p_permission: perm, p_endpoint: ep, p_user_agent: navigator.userAgent.slice(0, 300)});
+  }catch(e){ /* nicht wichtig */ }
 }
 // Beim Öffnen einmal fragen, wenn auf diesem Gerät noch keine Benachrichtigungen an sind ("Später": in 3 Tagen wieder)
 async function pushPrompt(){
@@ -2563,7 +2574,7 @@ function manualCard(){
   const adminSec = !S.admin ? '' : manDet('admin', 'Tab Admin (nur für den Admin)', `<ul>
     <li>Alle Karten sind einklappbar und zeigen eingeklappt eine Kurzzeile, zum Beispiel was überfällig ist. Beim Öffnen der App ist alles eingeklappt, ein Tipp auf die Karte klappt sie auf.</li>
     <li><b>Offen auf einen Blick:</b> für Hühner und Ziegen die PayPal-Eingänge zum Prüfen, Bargeld bei Familien, offene Bestellungen, letzter Kassenabgleich, letzte Sicherung und bis wann der Dienstplan eingetragen ist. Rot heißt überfällig. Mit <b>↻ Neu laden</b> lädst du neu.</li>
-    <li><b>Familien im Blick:</b> je Familie, wann sie zuletzt in der App war, wann sie sich zuletzt mit dem Code angemeldet hat, wann sie zuletzt etwas eingetragen hat und auf wie vielen Handys Benachrichtigungen und Erinnerungen eingeschaltet sind.</li>
+    <li><b>Familien im Blick:</b> je Familie, wann sie zuletzt in der App war, wann sie sich zuletzt mit dem Code angemeldet hat, wann sie zuletzt etwas eingetragen hat und auf wie vielen Handys Benachrichtigungen und Erinnerungen eingeschaltet sind. Darunter jedes angemeldete Gerät mit Gerät und Browser, angemeldet seit, zuletzt aktiv, ob die App vom Home-Bildschirm geöffnet wird, ob Benachrichtigungen erlaubt sind und ob die letzte Nachricht angekommen ist. Geräte mit Problemen sind rot umrandet.</li>
     <li><b>Wer bekommt was?:</b> Tippe auf eine Familie und nimm den Haken bei einer Art von Benachrichtigung weg (neue Bestellung, offene Bestellung für die Familie mit Dienst, Dienst und Wochenrückblick, Bargeld einzahlen, Zahlung prüfen, Monatsabschluss). Das gilt sofort für alle Handys der Familie.</li>
     <li>Nachrichten an Familien schickst du wie alle anderen im Tab <b>Hof</b> mit <b>Nachricht an Familien senden</b>.</li>
     <li><b>Erinnerungen:</b> ob der Zeitplan läuft und was die letzten Läufe um 18 Uhr verschickt haben. Mit <b>Vorschau anzeigen</b> siehst du für einen Tag, welche Erinnerungen rausgehen würden, mit <b>An mich senden</b> kommen sie nur auf dein Handy. Die Familien bekommen dabei nichts.</li>
@@ -2907,20 +2918,72 @@ function admFamCard(){
   const fams = adm.data.families.filter(f => !f.left_on);
   const line = (label, v) => `<div class="muted" style="font-size:14px">${label}: <span style="color:var(--ink)">${v}</span></div>`;
   const noDev = fams.filter(f => !f.devices && !f.system).length;
-  return foldCard('adm-fam', '👀', 'Familien im Blick', `${fams.length} ${fams.length === 1 ? 'Konto' : 'Konten'}${noDev ? ` · ${noDev} ohne Benachrichtigungen` : ''}`, `
+  const hasList = fams.some(f => Array.isArray(f.device_list));
+  const warnN = hasList ? fams.reduce((a, f) => a + (f.device_list || []).filter(x => devWarn(x)).length + (f.device_extra || []).filter(x => x.last_push_ok === false).length, 0) : 0;
+  return foldCard('adm-fam', '👀', 'Familien im Blick', `${fams.length} ${fams.length === 1 ? 'Konto' : 'Konten'}${noDev ? ` · ${noDev} ohne Benachrichtigungen` : ''}${warnN ? ` · ${warnN} ${warnN === 1 ? 'Gerät' : 'Geräte'} prüfen` : ''}`, `
     ${fams.map(f => {
       const act = latest(f.last_laid, f.last_egg, f.last_tx, f.last_change);
       const dev = f.devices ? `${f.devices} ${f.devices === 1 ? 'Gerät' : 'Geräte'}, Erinnerungen ${f.devices_rem === f.devices ? 'an' : f.devices_rem ? `auf ${f.devices_rem} an` : 'aus'}` : '<span class="neg">keine Benachrichtigungen</span>';
-      return `<div class="item" style="align-items:flex-start;flex-direction:column;gap:2px">
+      return `<div class="item" style="align-items:stretch;flex-direction:column;gap:2px">
         <strong>${esc(f.name)}${f.system ? ' <span class="muted">(Admin-Konto)</span>' : ''}</strong>
         ${line('Zuletzt in der App', f.last_seen ? agoText(f.last_seen) : 'nicht angemeldet')}
         ${line('Letzte Anmeldung mit Code', f.last_sign_in ? agoText(f.last_sign_in) : 'noch nie')}
         ${line('Zuletzt etwas eingetragen', act ? agoText(act) : 'noch nie')}
         ${f.last_laid ? line('Zuletzt Eier gezählt', agoText(f.last_laid)) : ''}
         ${line('Benachrichtigungen', dev)}
+        ${Array.isArray(f.device_list) ? devListHtml(f) : ''}
       </div>`;
     }).join('')}
-    ${info('„Zuletzt in der App“: Die App erneuert die Anmeldung etwa stündlich, solange sie offen ist. Das zeigt ungefähr, wann die Familie die App zuletzt benutzt hat. „Letzte Anmeldung mit Code“ ist die Anmeldung mit dem 6-stelligen Code, danach bleibt man angemeldet. „Eingetragen“ zählt Eier, Buchungen und Änderungen in beiden Projekten. Benachrichtigungen: Geräte, auf denen die Familie sie eingeschaltet hat.')}`, {list:true});
+    ${info('„Zuletzt in der App“: Die App erneuert die Anmeldung etwa stündlich, solange sie offen ist. Das zeigt ungefähr, wann die Familie die App zuletzt benutzt hat. „Letzte Anmeldung mit Code“ ist die Anmeldung mit dem 6-stelligen Code, danach bleibt man angemeldet. „Eingetragen“ zählt Eier, Buchungen und Änderungen in beiden Projekten. Benachrichtigungen: Geräte, auf denen die Familie sie eingeschaltet hat.' + (hasList ? ' Geräte: jedes Handy oder jeder Browser, auf dem die Familie gerade angemeldet ist. „Home-Bildschirm“ heißt, die App wurde von dort geöffnet (auf dem iPhone nötig für Benachrichtigungen). „Nicht erlaubt“ heißt, die Benachrichtigungen wurden am Handy abgelehnt und müssen dort in den Einstellungen freigegeben werden. „Letzte Nachricht“ zeigt, ob die letzte Benachrichtigung an dieses Gerät angekommen ist. Details erscheinen, sobald die Familie die App nach dem Update einmal öffnet.' : ''))}`, {list:true});
+}
+// Gerät und Browser aus der Kennung des Browsers, grob (kein genaues Modell)
+function devName(ua){
+  ua = ua || '';
+  const os = /iPad/.test(ua) ? 'iPad' : /iPhone|iPod/.test(ua) ? 'iPhone' : /Android/.test(ua) ? (/Mobile/.test(ua) ? 'Android-Handy' : 'Android-Tablet')
+    : /Windows/.test(ua) ? 'Windows-PC' : /Macintosh|Mac OS X/.test(ua) ? 'Mac' : /CrOS/.test(ua) ? 'Chromebook' : /Linux/.test(ua) ? 'Linux-PC' : 'Unbekanntes Gerät';
+  const br = /SamsungBrowser/.test(ua) ? 'Samsung Internet' : /EdgA?\//.test(ua) ? 'Edge' : /OPR\/|Opera/.test(ua) ? 'Opera' : /Firefox\/|FxiOS/.test(ua) ? 'Firefox'
+    : /CriOS|Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : '';
+  return br ? `${os} · ${br}` : os;
+}
+const devIcon = ua => /iPhone|iPad|iPod|Android/.test(ua || '') ? '📱' : '💻';
+const devIOS = ua => /iPhone|iPad|iPod/.test(ua || '');
+const dateDE = iso => new Date(iso).toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit', year:'numeric'});
+// Braucht dieses Gerät Aufmerksamkeit? (Benachrichtigungen abgelehnt, iPhone ohne Home-Bildschirm, letzte Nachricht fehlgeschlagen)
+function devWarn(x){
+  if(x.push && x.last_push_ok === false) return 'Letzte Nachricht ist nicht angekommen';
+  if(!x.info_at) return '';
+  if(x.permission === 'denied') return 'Benachrichtigungen am Handy abgelehnt';
+  if(!x.push && devIOS(x.ua) && !x.standalone) return 'iPhone: App nicht vom Home-Bildschirm geöffnet, deshalb keine Benachrichtigungen';
+  return '';
+}
+function devPushText(x){
+  if(x.push) return `<span class="pos">an</span>${x.reminders === false ? ', Erinnerungen aus' : ''}`;
+  if(!x.info_at) return 'unbekannt';
+  return {denied:'<span class="neg">nicht erlaubt (am Handy abgelehnt, in den Handy-Einstellungen freigeben)</span>', granted:'erlaubt, aber nicht eingeschaltet', default:'noch nicht eingeschaltet', unsupported:'auf diesem Gerät nicht möglich'}[x.permission] || 'aus';
+}
+function devLastText(x){
+  if(!x.last_push_at) return 'noch keine gesendet';
+  return x.last_push_ok ? `<span class="pos">angekommen</span>, ${agoText(x.last_push_at)}` : `<span class="neg">nicht angekommen</span>${x.last_push_status ? ` (Fehler ${x.last_push_status})` : ''}, ${agoText(x.last_push_at)}`;
+}
+function devListHtml(f){
+  const L = f.device_list || [], X = f.device_extra || [];
+  if(!L.length && !X.length) return `<div class="muted" style="font-size:14px;margin-top:6px">Auf keinem Gerät angemeldet.</div>`;
+  const row = (label, v) => `<div class="muted" style="font-size:14px">${label}: <span style="color:var(--ink)">${v}</span></div>`;
+  const box = (inner, warn) => `<div style="margin-top:6px;padding:8px 10px;border-radius:10px;border:1px solid ${warn ? 'var(--bad)' : 'var(--line)'}">${inner}</div>`;
+  return `<div class="muted" style="font-size:14px;margin-top:6px">${L.length} ${L.length === 1 ? 'Gerät' : 'Geräte'} angemeldet</div>`
+    + L.map(x => {
+      const w = devWarn(x);
+      return box(`<div style="font-weight:600">${devIcon(x.ua)} ${esc(devName(x.ua))}</div>
+        ${row('Angemeldet seit', dateDE(x.since))}
+        ${row('Zuletzt aktiv', agoText(x.seen))}
+        ${x.info_at ? row('Geöffnet', x.standalone ? 'vom Home-Bildschirm' : 'im Browser') : '<div class="muted" style="font-size:14px">Weitere Details, sobald die App auf diesem Gerät neu geöffnet wird.</div>'}
+        ${row('Benachrichtigungen', devPushText(x))}
+        ${x.push ? row('Letzte Nachricht', devLastText(x)) : ''}
+        ${w && x.permission !== 'denied' ? `<div class="neg" style="font-size:14px;margin-top:2px">⚠️ ${esc(w)}</div>` : ''}`, !!w);
+    }).join('')
+    + X.map(x => box(`<div style="font-weight:600">🔔 ${esc(devName(x.ua))}</div>
+        <div class="muted" style="font-size:14px">Benachrichtigungen an, seit ${dateDE(x.since)}${x.reminders === false ? ', Erinnerungen aus' : ''}. Dieses Gerät hat die App nach dem Update noch nicht geöffnet.</div>
+        ${row('Letzte Nachricht', devLastText(x))}`, x.last_push_ok === false)).join('');
 }
 
 /* Wer bekommt was? Schalter je Familie und Art der Benachrichtigung (Tabelle push_prefs, gelesen von notify-order) */
