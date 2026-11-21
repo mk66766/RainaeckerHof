@@ -1131,8 +1131,8 @@ function sheetSale(oid, seller, n, own){
     <label>Preis pro Ei, extern (€)</label><input id="p" type="text" inputmode="decimal" value="${String(P().price).replace('.',',')}" oninput="saleCalc()">
     <label>Verkauft von</label><select id="sv" onchange="saleStockLine()">${famOptions(seller || S.me)}</select>
     <label class="tick"><input type="checkbox" id="own" ${own ? 'checked' : ''} onchange="saleStockLine()"> Eier aus Familienbestand verkaufen</label>
-    <p class="muted" style="margin:4px 0 0;font-size:14px">Haken setzen, wenn die Familie die Eier schon früher entnommen hat (etwa in einer Vorwoche). Sie kommen dann über den Übertrag zurück in den Vorrat und werden nicht doppelt abgezogen.</p>
-    <div class="note-warn" id="ownd" ${own ? '' : 'hidden'}>💛 Die Familie verzichtet auf diese Eier. Der Erlös geht als <b>Spende</b> in die Gemeinschaftskasse, es entsteht kein Guthaben für die Familie.</div>
+    <p class="muted" id="ownx" style="margin:4px 0 0;font-size:14px" ${own ? '' : 'hidden'}>Für Eier, die die Familie schon früher entnommen hat (etwa in einer Vorwoche). Sie kommen über den Übertrag zurück in den Vorrat und werden nicht doppelt abgezogen.</p>
+    <div class="note-warn" id="ownd" ${own ? '' : 'hidden'}>💛 Die Familie verzichtet auf diese Eier. Der Erlös geht als <b>Spende</b> in die Gemeinschaftskasse.</div>
     <div class="stockline" id="sl"></div>
     <label>Wie wird bezahlt?</label>${pmSeg('bar')}
     <div id="recv"><label>Erhalten (€), mehr als der Preis zählt als Trinkgeld</label><input id="rc" type="text" inputmode="decimal" value="${money(qty * P().price)}" oninput="this.dataset.touched=1"></div>` + actions('doSale()'));
@@ -1151,7 +1151,7 @@ function ownLeft(fid){
 function saleStockLine(){
   const el = document.getElementById('sl'), ownEl = document.getElementById('own'); if(!el || !ownEl) return;
   const n = Math.max(0, Math.floor(num(val('n')))), own = ownEl.checked, st = stock(), f = val('sv'), left = f ? ownLeft(f) : 0;
-  const box = document.getElementById('ownd'); if(box) box.hidden = !own;
+  ['ownd', 'ownx'].forEach(id => { const b = document.getElementById(id); if(b) b.hidden = !own; });
   const eggs = k => `${k} Ei${k===1?'':'er'}`;
   if(own && n > left){
     el.className = 'stockline bad';
