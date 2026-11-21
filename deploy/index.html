@@ -340,13 +340,15 @@ function ask(text, o = {}){
 }
 const lsGet = k => { try{ return localStorage.getItem(k); }catch(e){ return null; } };
 const lsSet = (k,v) => { try{ localStorage.setItem(k,v); }catch(e){} };
-/* Einklappbare Karten: offen oder zu merkt sich jedes Handy je Karte (localStorage „hof-fold“). Neue Karten starten eingeklappt. */
-const FOLD_KEY = 'hof-fold';
-let foldSt = (() => { try{ return JSON.parse(lsGet(FOLD_KEY) || '{}') || {}; }catch(e){ return {}; } })();
+/* Einklappbare Karten: Beim Öffnen der App sind alle Karten eingeklappt (seit 21.11.2026). Was man aufklappt, bleibt offen,
+   bis die App geschlossen wird oder länger als FOLD_RESET_MIN Minuten im Hintergrund war (dann wieder alles zu). Nur im Speicher. */
+const FOLD_RESET_MIN = 30;
+let foldSt = {}, hiddenAt = 0;
+try{ localStorage.removeItem('hof-fold'); }catch(e){}   // früher gemerkter Zustand
 const isOpen = k => foldSt[k] === true;
 function setFold(k, open, rerender){
   if(isOpen(k) === open) return;
-  foldSt[k] = open; lsSet(FOLD_KEY, JSON.stringify(foldSt));
+  foldSt[k] = open;
   if(rerender) render();
 }
 // Karte mit Titel, Pfeil und Kurzzeile. Ist body eine Funktion, wird der Inhalt nur bei offener Karte berechnet.
@@ -469,7 +471,12 @@ async function setProject(id){
   tab = TABS[S.p.kind][0][0]; render(); window.scrollTo(0,0);
 }
 async function refresh(){ try{ if(tab === 'admin') adm.data = null; await loadProject(); render(); toast('Aktualisiert'); }catch(e){ toast('Fehler: ' + (e.message||e)); } }
-document.addEventListener('visibilitychange', () => { if(!document.hidden && S.p) loadProject().then(render).catch(()=>{}); });
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden){ hiddenAt = Date.now(); return; }
+  if(hiddenAt && Date.now() - hiddenAt > FOLD_RESET_MIN * 60000){ foldSt = {}; weekOff = 0; audit.open = false; }   // App lange im Hintergrund: wie neu geöffnet, alles eingeklappt
+  hiddenAt = 0;
+  if(S.p) loadProject().then(render).catch(()=>{});
+});
 
 /* ================= Login ================= */
 let selLogin = null, loginMsg = '';
@@ -878,6 +885,7 @@ let weekOff = 0;   // Karte „Diese Woche“: 0 = laufende Woche, -1 = Vorwoche
 function weekNav(k){ weekOff = Math.min(0, weekOff + k); render(); }
 function weekCard(){
   const p = P(), q = quota(), m = monday(new Date()), w = weekStats(m);
+  const wkS = ds(m), wkE = new Date(m); wkE.setDate(wkE.getDate()+6); const wkLog = p.log.filter(l => l.date >= wkS && l.date <= ds(wkE));
   const sp = surplusParts(m), avail = sp.surplus;
   const short = Math.max(0, w.total - w.laid), oq = orderQueue(), readyO = openOrders().filter(o => oq.q[o.id].ready), openQty = sum(readyO, o => o.qty), waitN = openOrders().length - readyO.length;
   return `
@@ -906,6 +914,7 @@ function weekCard(){
         <div class="row"><strong>${esc(f.name)}${f.id===S.me?' <span class="muted">(du)</span>':''}</strong><span>${ent===0&&t===0?'verzichtet':`${t} von ${ent}`}${wv&&ent>0?` <span class="pill">Verzicht ${wv}</span>`:''}${extra?` <span class="pill">+${extra} Zusatz</span>`:''}</span></div>
         ${ent>0 ? `<div class="eier" role="img" aria-label="${Math.min(t,ent)} von ${ent} Eiern genommen">${eggIcons(Math.min(t,ent), ent)}</div>` : ''}
         </div>
+        ${takeRows(wkLog.filter(l => l.fam === f.id))}
         <button class="${f.id===S.me?'yolk':'alt'} small" onclick="sheetTake('${f.id}',${left||1})">Entnehmen</button>
         </div>`; }).join('')}</div>`)}`;
 }
@@ -961,6 +970,8 @@ function weekHead(m){
   return `<div class="row" style="margin-top:8px;justify-content:flex-end">
       <span class="weeknav"><button class="ghost small" onclick="weekNav(-1)" ${canBack?'':'disabled'} aria-label="Frühere Woche">◀</button><span class="muted">${fmtDay(m)} – ${fmtDay(e)}</span><button class="ghost small" onclick="weekNav(1)" ${weekOff<0?'':'disabled'} aria-label="Spätere Woche">▶</button></span></div>`;
 }
+// Einzelne Entnahmen/Zusatz-Eier einer Familie mit „Ändern“ und ✕ (laufende und frühere Wochen)
+const takeRows = ls => ls.filter(l => l.type === 'take' || l.type === 'zusatz').sort((a,b) => a.date.localeCompare(b.date) || String(a.at||'').localeCompare(String(b.at||''))).map(l => `<div class="row" style="font-size:14px"><span class="muted">${parseD(l.date).toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'short'})}: ${l.type==='zusatz'?`${l.n} Zusatz-Ei${l.n===1?'':'er'}`:`${l.n} entnommen`}</span>${canEditDate(l.date) ? `<span><button class="alt small" onclick="sheetEditLog('${l.id}','week')">Ändern</button> <button class="ghost small" onclick="delLog('${l.id}')" aria-label="Löschen">✕</button></span>` : '<span class="muted">nur Admin</span>'}</div>`).join('');
 // Frühere Woche: was jede Familie genommen hat, mit den einzelnen Entnahmen zum Ändern
 function pastWeekCard(){
   const p = P(), q = quota(), m = monday(new Date()); m.setDate(m.getDate() + 7*weekOff);
@@ -979,7 +990,7 @@ function pastWeekCard(){
       return `<div class="item" style="flex-direction:column;align-items:stretch;gap:6px">
         <div class="row"><strong>${esc(f.name)}${f.id===S.me?' <span class="muted">(du)</span>':''}</strong><span>${member ? (ent===0&&t===0?'verzichtet':`${t} von ${ent}`) : `${t} genommen`}${wv&&ent>0?` <span class="pill">Verzicht ${wv}</span>`:''}${z?` <span class="pill">+${z} Zusatz</span>`:''}</span></div>
         ${ent>0 ? `<div class="eier" role="img" aria-label="${Math.min(t,ent)} von ${ent} Eiern genommen">${eggIcons(Math.min(t,ent), ent)}</div>` : ''}
-        ${mine.filter(l => l.type !== 'verzicht').map(l => `<div class="row" style="font-size:14px"><span class="muted">${parseD(l.date).toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'short'})}: ${l.type==='zusatz'?`${l.n} Zusatz-Ei${l.n===1?'':'er'}`:`${l.n} entnommen`}</span>${canEditDate(l.date) ? `<span><button class="alt small" onclick="sheetEditLog('${l.id}','week')">Ändern</button> <button class="ghost small" onclick="delLog('${l.id}')" aria-label="Löschen">✕</button></span>` : '<span class="muted">nur Admin</span>'}</div>`).join('')}
+        ${takeRows(mine)}
         ${member && canEditDate(addDate) ? `<button class="alt small" style="align-self:flex-start" onclick="sheetTake('${f.id}',${Math.max(1, ent - t)},'${addDate}')">Entnahme nachtragen</button>` : ''}
       </div>`; }).join('') || '<div class="empty">In dieser Woche wurde nichts entnommen.</div>'}</div>
     <button class="ghost" style="margin-top:8px" onclick="weekOff=0;render()">Zur laufenden Woche</button>`);
@@ -2550,7 +2561,7 @@ function manualCard(){
     <li>Viele Karten lassen sich mit einem Tipp auf die Überschrift auf- und zuklappen. Eingeklappt zeigen sie eine Kurzzeile (z. B. bei <b>Diese Woche</b> gelegt und genommen). Dein Handy merkt sich, welche Karten du offen oder zu hattest.</li>
     </ul>`);
   const adminSec = !S.admin ? '' : manDet('admin', 'Tab Admin (nur für den Admin)', `<ul>
-    <li>Alle Karten sind einklappbar und zeigen eingeklappt eine Kurzzeile, zum Beispiel was überfällig ist.</li>
+    <li>Alle Karten sind einklappbar und zeigen eingeklappt eine Kurzzeile, zum Beispiel was überfällig ist. Beim Öffnen der App ist alles eingeklappt, ein Tipp auf die Karte klappt sie auf.</li>
     <li><b>Offen auf einen Blick:</b> für Hühner und Ziegen die PayPal-Eingänge zum Prüfen, Bargeld bei Familien, offene Bestellungen, letzter Kassenabgleich, letzte Sicherung und bis wann der Dienstplan eingetragen ist. Rot heißt überfällig. Mit <b>↻ Neu laden</b> lädst du neu.</li>
     <li><b>Familien im Blick:</b> je Familie, wann sie zuletzt in der App war, wann sie sich zuletzt mit dem Code angemeldet hat, wann sie zuletzt etwas eingetragen hat und auf wie vielen Handys Benachrichtigungen und Erinnerungen eingeschaltet sind.</li>
     <li><b>Wer bekommt was?:</b> Tippe auf eine Familie und nimm den Haken bei einer Art von Benachrichtigung weg (neue Bestellung, offene Bestellung für die Familie mit Dienst, Dienst und Wochenrückblick, Bargeld einzahlen, Zahlung prüfen, Monatsabschluss). Das gilt sofort für alle Handys der Familie.</li>
@@ -2643,7 +2654,7 @@ function manualCard(){
         <li>In der Karte <b>Diese Woche</b> sind für jede Familie die ersten <b>${q} Eier</b> pro Woche frei. Die kleinen Eier zeigen, wie viele sie schon genommen hat: gefüllt = genommen, leer = noch frei. Die Eier werden nicht zurückgelegt.</li>
         <li><b>Entnehmen:</b> trägt ein, dass die Familie ihre Eier abholt. Die Menge ist mit dem Rest der freien Eier vorausgefüllt. Nimmt sie mehr als die freien Eier, fragt die App nach dem Preis: Für jedes weitere Ei zahlt die Familie den internen Preis in die Gemeinschaftskasse, danach öffnet sich die Bezahlung (wie bei <b>Zusatz</b>).</li>
         <li>Bezahlte Eier über den freien Eiern stehen dort als <b>+n Zusatz</b>.</li>
-        <li>Mit ◀ und ▶ oben in der Karte blätterst du in frühere Wochen. Dort siehst du, wer wann wie viele Eier genommen hat, und kannst jede Entnahme mit <b>Ändern</b> korrigieren oder mit ✕ löschen (ältere als 14 Tage nur der Admin). Vergessene Entnahmen trägst du dort bei der Familie mit <b>Entnahme nachtragen</b> ein (zählt für die Woche, die du gerade siehst). Beim Entnehmen kannst du auch selbst ein <b>Datum</b> wählen. <b>Zur laufenden Woche</b> bringt dich zurück.</li></ul>`),
+        <li>Unter jeder Familie stehen ihre Entnahmen der Woche. Ist eine falsch (falsche Anzahl, falsche Familie, falscher Tag), korrigierst du sie mit <b>Ändern</b> oder löschst sie mit ✕; jede Familie darf das, auch in der laufenden Woche (ältere als 14 Tage nur der Admin). Mit ◀ und ▶ oben in der Karte blätterst du in frühere Wochen und siehst dort genauso, wer wann wie viele Eier genommen hat. Vergessene Entnahmen trägst du dort bei der Familie mit <b>Entnahme nachtragen</b> ein (zählt für die Woche, die du gerade siehst). Beim Entnehmen kannst du auch selbst ein <b>Datum</b> wählen. <b>Zur laufenden Woche</b> bringt dich zurück.</li></ul>`),
       manDet('stat', 'Statistik', `<ul>
         <li><b>Tage:</b> die Woche als Säulen. Mit ‹ und › blätterst du zurück, ein Tipp auf eine Säule öffnet den Tag.</li>
         <li><b>Wochen:</b> alle Kalenderwochen nebeneinander (seitlich wischen), dazu Gesamt, Durchschnitt und beste Woche.</li>
