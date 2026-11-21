@@ -254,6 +254,12 @@ async function sendQueue(d: Deps, cfg: Record<string, string>, site: string): Pr
   const rem = await sendOrderReminders(d, cfg, site);
   return json(rem ? { ...res, reminded: rem.reminded, sent: res.sent + rem.sent } : res);
 }
+// Ergebnis des letzten Versands je Gerät merken (für die Geräteliste im Tab Admin). Fehlen die Spalten
+// (Migration 2026-11-21_device_details.sql noch nicht eingespielt), passiert einfach nichts.
+async function markPush(d: Deps, id: string, ok: boolean, status: number | null) {
+  try { await d.admin.from("push_subscriptions").update({ last_push_at: new Date().toISOString(), last_push_ok: ok, last_push_status: status }).eq("id", id); }
+  catch { /* egal */ }
+}
 // Push an alle Geräte der genannten Nutzer; abgemeldete Geräte (404/410) werden gelöscht
 async function sendTo(d: Deps, cfg: Record<string, string>, site: string, userIds: string[], payloadFor: (userId: string) => Payload | null, opts: any, onlyReminders = false) {
   const res = { total: 0, sent: 0, gone: 0, failed: 0 };
@@ -269,13 +275,14 @@ async function sendTo(d: Deps, cfg: Record<string, string>, site: string, userId
     const p = payloadFor(s.user_id);
     if (!p) return;
     try {
-      await d.webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(p), opts);
+      const r: any = await d.webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(p), opts);
       res.sent++;
+      await markPush(d, s.id, true, r?.statusCode ?? 201);
     } catch (e: any) {
       if (e?.statusCode === 404 || e?.statusCode === 410) {          // Gerät hat sich abgemeldet
         await d.admin.from("push_subscriptions").delete().eq("id", s.id);
         res.gone++;
-      } else { res.failed++; }
+      } else { res.failed++; await markPush(d, s.id, false, typeof e?.statusCode === "number" ? e.statusCode : null); }
     }
   }));
   return res;
